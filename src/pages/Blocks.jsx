@@ -118,7 +118,7 @@ const Blocks = () => {
     setGenResult(null);
     try {
       // Úsalo con slash final (evita 404/redirects en CORS)
-      const res = await fetch("https://boletos.dev-wit.com/api/route-blocks-generated/generate/", {
+      const res = await fetch("https://bcentinela.dev-wit.com/api/route-blocks-generated/generate/", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -154,9 +154,9 @@ const Blocks = () => {
 
       try {
         const [resBlocks, resRM, resLayouts] = await Promise.all([
-          fetch('https://boletos.dev-wit.com/api/route-blocks/'),
-          fetch('https://boletos.dev-wit.com/api/route-masters/'),
-          fetch('https://boletos.dev-wit.com/api/layouts/'),
+          fetch('https://bcentinela.dev-wit.com/api/route-blocks/'),
+          fetch('https://bcentinela.dev-wit.com/api/route-masters/'),
+          fetch('https://bcentinela.dev-wit.com/api/layouts/'),
         ]);
 
         const [bodyBlocks, bodyRM, bodyLayouts] = await Promise.all([
@@ -236,7 +236,7 @@ const Blocks = () => {
   const handleActualizar = async () => {
     setActualizando(true);
     try {
-      const res = await fetch('https://boletos.dev-wit.com/api/route-blocks/');
+      const res = await fetch('https://bcentinela.dev-wit.com/api/route-blocks/');
       const body = await parseSafe(res);
       if (!res.ok) throw new Error(body?.message || 'No se pudo actualizar la lista de bloques');
       if (!Array.isArray(body)) throw new Error('La API no devolvió una lista de bloques');

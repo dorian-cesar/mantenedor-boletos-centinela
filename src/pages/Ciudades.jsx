@@ -32,7 +32,7 @@ const Ciudades = () => {
   useEffect(() => {
     const fetchCiudades = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/cities');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/cities');
         const data = await res.json();
         setCiudades(data);
       } catch (error) {
@@ -66,8 +66,8 @@ const Ciudades = () => {
   const handleGuardar = async () => {
     const esNueva = !ciudadEditando;
     const url = esNueva
-      ? 'https://boletos.dev-wit.com/api/cities'
-      : `https://boletos.dev-wit.com/api/cities/${ciudadEditando}`;
+      ? 'https://bcentinela.dev-wit.com/api/cities'
+      : `https://bcentinela.dev-wit.com/api/cities/${ciudadEditando}`;
     const metodo = esNueva ? 'POST' : 'PUT';
 
     try {
@@ -112,7 +112,7 @@ const Ciudades = () => {
     if (!confirm.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/cities/${id}`, {
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/cities/${id}`, {
         method: 'DELETE'
       });
 
@@ -146,7 +146,7 @@ const Ciudades = () => {
                 onClick={async () => {
                   setActualizando(true);
                   try {
-                    const res = await fetch('https://boletos.dev-wit.com/api/cities');
+                    const res = await fetch('https://bcentinela.dev-wit.com/api/cities');
                     const data = await res.json();
 
                     setCiudades((prevCiudades) => {

@@ -29,7 +29,7 @@ const Buses = () => {
   useEffect(() => {
     const fetchBuses = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/buses/');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/buses/');
         const data = await res.json();
         setBuses(data);
       } catch (error) {
@@ -47,7 +47,7 @@ const Buses = () => {
       setLayoutsLoading(true);
       setLayoutsError('');
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/layouts/');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
         const text = await res.text();
         let body;
         try { body = JSON.parse(text); } catch { body = []; }
@@ -90,7 +90,7 @@ const Buses = () => {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/buses/${id}`, {
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/buses/${id}`, {
         method: 'DELETE',
       });
 
@@ -212,7 +212,7 @@ const Buses = () => {
                   onClick={async () => {
                     setActualizando(true);
                     try {
-                      const res = await fetch('https://boletos.dev-wit.com/api/buses/');
+                      const res = await fetch('https://bcentinela.dev-wit.com/api/buses/');
                       if (!res.ok) throw new Error('Error al obtener buses desde el servidor');
                       const data = await res.json();
                       setBuses((prev) => {
@@ -440,8 +440,8 @@ const Buses = () => {
                   setGuardando(true);
                   try {
                     const url = busEditando
-                      ? `https://boletos.dev-wit.com/api/buses/${busEditando._id}`
-                      : 'https://boletos.dev-wit.com/api/buses/';
+                      ? `https://bcentinela.dev-wit.com/api/buses/${busEditando._id}`
+                      : 'https://bcentinela.dev-wit.com/api/buses/';
                     const method = busEditando ? 'PUT' : 'POST';
 
                     const res = await fetch(url, {

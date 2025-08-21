@@ -76,7 +76,7 @@ const Layout = () => {
     try {
       if (!layout?._id) throw new Error('Este layout no tiene _id. No se puede cargar.');
 
-      const res = await fetch(`https://boletos.dev-wit.com/api/layouts/${layout._id}`);
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/layouts/${layout._id}`);
 
       if (!res.ok) throw new Error('No se pudo cargar el layout completo');
       const fullLayout = await res.json();
@@ -127,7 +127,7 @@ const Layout = () => {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/layouts/${_id}`, {
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/layouts/${_id}`, {
         method: 'DELETE',
       });
       await showToast('Layout eliminado', 'El layout fue eliminado exitosamente.');
@@ -144,7 +144,7 @@ const Layout = () => {
     const fetchLayouts = async () => {
       setCargando(true);
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/layouts/');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
         const text = await res.text();
         let body;
         try {
@@ -284,8 +284,8 @@ const Layout = () => {
 
     try {
       const url = layoutEditando
-      ? `https://boletos.dev-wit.com/api/layouts/${layoutEditando}`
-      : 'https://boletos.dev-wit.com/api/layouts/';
+      ? `https://bcentinela.dev-wit.com/api/layouts/${layoutEditando}`
+      : 'https://bcentinela.dev-wit.com/api/layouts/';
       const method = layoutEditando ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
@@ -304,7 +304,7 @@ const Layout = () => {
 
       // Recarga la lista desde el backend
       setCargando(true);
-      const resList = await fetch('https://boletos.dev-wit.com/api/layouts/');
+      const resList = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
       const data = await resList.json();
       setLayouts(data.map(layout => ({
         ...layout,
@@ -599,7 +599,7 @@ const Layout = () => {
                 onClick={async () => {
                   setActualizando(true);
                   try {
-                    const res = await fetch('https://boletos.dev-wit.com/api/layouts/');
+                    const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
                     if (!res.ok) throw new Error('Error al obtener layouts desde el servidor');
                     const data = await res.json();
 

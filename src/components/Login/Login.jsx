@@ -69,7 +69,7 @@ function Login() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
 
-      const respuesta = await fetch('https://boletos.dev-wit.com/api/users/login', {
+      const respuesta = await fetch('https://bcentinela.dev-wit.com/api/users/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(datos),

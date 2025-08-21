@@ -36,8 +36,8 @@ const Usuarios = () => {
 
     try {
       const url = modoEdicion
-        ? `https://boletos.dev-wit.com/api/users/${usuarioEditandoId}`
-        : 'https://boletos.dev-wit.com/api/users/register';
+        ? `https://bcentinela.dev-wit.com/api/users/${usuarioEditandoId}`
+        : 'https://bcentinela.dev-wit.com/api/users/register';
 
       const method = modoEdicion ? 'PUT' : 'POST';
       const bodyData = { ...formData };
@@ -86,7 +86,7 @@ const Usuarios = () => {
         }
       }
 
-      const res = await fetch("https://boletos.dev-wit.com/api/users/", {
+      const res = await fetch("https://bcentinela.dev-wit.com/api/users/", {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -153,7 +153,7 @@ const Usuarios = () => {
     const token = sessionStorage.getItem("token") || JSON.parse(localStorage.getItem("recordarSession") || '{}').token;
 
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/users/${id}`, {
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/users/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`
@@ -203,7 +203,7 @@ const Usuarios = () => {
                         }
                       }
 
-                      const res = await fetch("https://boletos.dev-wit.com/api/users/", {
+                      const res = await fetch("https://bcentinela.dev-wit.com/api/users/", {
                         headers: {
                           Authorization: `Bearer ${token}`,
                           'Content-Type': 'application/json'

@@ -231,7 +231,7 @@ const Servicios = () => {
   useEffect(() => {
     const fetchLayouts = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/layouts/');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
         const data = await res.json();
         setLayouts(data);
       } catch (error) {
@@ -244,7 +244,7 @@ const Servicios = () => {
   useEffect(() => {
     const obtenerCiudades = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/cities');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/cities');
         const data = await res.json();
         setCiudades(data);
       } catch (error) {
@@ -290,7 +290,7 @@ const Servicios = () => {
   useEffect(() => {
     const cargarOrigenes = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/routes/origins');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/routes/origins');
         const data = await res.json();
         setOrigenesDestinos(data);
       } catch (error) {
@@ -327,7 +327,7 @@ const Servicios = () => {
         sessionStorage.getItem("token") ||
         JSON.parse(localStorage.getItem("recordarSession") || "{}").token;
 
-      const res = await fetch("https://boletos.dev-wit.com/api/services/all", {
+      const res = await fetch("https://bcentinela.dev-wit.com/api/services/all", {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -454,8 +454,8 @@ const Servicios = () => {
       };
 
       const endpoint = editandoServicioId
-        ? `https://boletos.dev-wit.com/api/templates/update/${editandoServicioId}`
-        : `https://boletos.dev-wit.com/api/templates/create`;
+        ? `https://bcentinela.dev-wit.com/api/templates/update/${editandoServicioId}`
+        : `https://bcentinela.dev-wit.com/api/templates/create`;
 
       const metodo = editandoServicioId ? 'PUT' : 'POST';
 
@@ -500,7 +500,7 @@ const Servicios = () => {
         arrivalTime: nuevoServicio.arrivalTime
       };
 
-      const res = await fetch(`https://boletos.dev-wit.com/api/templates/${servicioSeleccionado._id}`, {
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/templates/${servicioSeleccionado._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

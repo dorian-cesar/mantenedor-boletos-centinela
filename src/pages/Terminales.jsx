@@ -11,7 +11,7 @@ const Terminales = () => {
   useEffect(() => {
     const fetchTerminales = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/terminals');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/terminals');
         const data = await res.json();
         setTerminales(data);
       } catch (error) {

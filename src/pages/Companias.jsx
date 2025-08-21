@@ -12,7 +12,7 @@ const Companias = () => {
   useEffect(() => {
     const fetchCompanias = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/companies');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/companies');
         const data = await res.json();
         setCompanias(data);
       } catch (error) {

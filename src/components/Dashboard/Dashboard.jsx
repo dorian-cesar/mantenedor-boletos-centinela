@@ -57,7 +57,7 @@ const Dashboard = () => {
     }
 
     try {
-      const res = await fetch('https://boletos.dev-wit.com/api/users/', {
+      const res = await fetch('https://bcentinela.dev-wit.com/api/users/', {
         headers: {
           'Authorization': `Bearer ${token}`
         }

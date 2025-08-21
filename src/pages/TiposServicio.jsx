@@ -21,8 +21,8 @@ const TiposServicio = () => {
 
   const handleGuardar = async () => {
     const endpoint = tipoEditando
-      ? `https://boletos.dev-wit.com/api/tipoServicio/${tipoEditando}`
-      : `https://boletos.dev-wit.com/api/tipoServicio/`;
+      ? `https://bcentinela.dev-wit.com/api/tipoServicio/${tipoEditando}`
+      : `https://bcentinela.dev-wit.com/api/tipoServicio/`;
 
     const metodo = tipoEditando ? 'PUT' : 'POST';
 
@@ -57,7 +57,7 @@ const TiposServicio = () => {
     if (!window.confirm('¿Estás seguro de eliminar este tipo de servicio?')) return;
 
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/tipoServicio/${id}`, {
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/tipoServicio/${id}`, {
         method: 'DELETE',
       });
 
@@ -72,7 +72,7 @@ const TiposServicio = () => {
   useEffect(() => {
     const fetchTipos = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/tipoServicio/');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/tipoServicio/');
         const data = await res.json();
         setTipos(data);
       } catch (error) {
@@ -104,7 +104,7 @@ const TiposServicio = () => {
                 onClick={async () => {
                   setActualizando(true);
                   try {
-                    const res = await fetch('https://boletos.dev-wit.com/api/tipoServicio/');
+                    const res = await fetch('https://bcentinela.dev-wit.com/api/tipoServicio/');
                     if (!res.ok) throw new Error('Error al obtener tipos desde el servidor');
                     const data = await res.json();
 

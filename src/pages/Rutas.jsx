@@ -54,7 +54,7 @@ const Rutas = () => {
     setLayoutsError('');
     setAvailableLayouts([]);
     try {
-      const res = await fetch('https://boletos.dev-wit.com/api/layouts/');
+      const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
       const text = await res.text();
       let body;
       try { body = JSON.parse(text); } catch { throw new Error('Respuesta no JSON al listar layouts'); }
@@ -141,7 +141,7 @@ const Rutas = () => {
   useEffect(() => {
     const fetchCiudades = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/cities');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/cities');
         const data = await res.json();
         setCiudades(Array.isArray(data) ? data : []);
       } catch (err) {
@@ -155,7 +155,7 @@ const Rutas = () => {
   useEffect(() => {
     const fetchRutas = async () => {
       try {
-        const res = await fetch('https://boletos.dev-wit.com/api/route-masters');
+        const res = await fetch('https://bcentinela.dev-wit.com/api/route-masters');
         const data = await res.json();
         setRutas(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -196,8 +196,8 @@ const Rutas = () => {
 
     const dataAGuardar = { name: formRuta.name, stops: stopsConOrden };
     const endpoint = esNuevaRuta
-      ? 'https://boletos.dev-wit.com/api/route-masters'
-      : `https://boletos.dev-wit.com/api/route-masters/${encodeURIComponent(rutaEditando)}`;
+      ? 'https://bcentinela.dev-wit.com/api/route-masters'
+      : `https://bcentinela.dev-wit.com/api/route-masters/${encodeURIComponent(rutaEditando)}`;
     const metodo = esNuevaRuta ? 'POST' : 'PUT';
 
     try {
@@ -238,7 +238,7 @@ const Rutas = () => {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/route-masters/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/route-masters/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Error al eliminar');
 
       setRutas((prev) => prev.filter((t) => t._id !== id));
@@ -259,7 +259,7 @@ const Rutas = () => {
     setBlocksError('');
     setBlocksData(null);  
 
-    const url = `https://boletos.dev-wit.com/api/route-blocks/byRouteMaster/${encodeURIComponent(id)}`;
+    const url = `https://bcentinela.dev-wit.com/api/route-blocks/byRouteMaster/${encodeURIComponent(id)}`;
 
     try {
       const res = await fetch(url, { method: 'GET' });
@@ -316,7 +316,7 @@ const Rutas = () => {
 
     blocksCountFetching.current.add(id);
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/route-blocks/byRouteMaster/${encodeURIComponent(id)}`);
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/route-blocks/byRouteMaster/${encodeURIComponent(id)}`);
       const text = await res.text();
       let body; try { body = JSON.parse(text); } catch { body = null; }
       const total = (body && typeof body.totalBlocks === 'number') ? body.totalBlocks : 0;
@@ -432,8 +432,8 @@ const Rutas = () => {
     try {
       const isCreate = blockMode === 'create';
       const url = isCreate
-        ? 'https://boletos.dev-wit.com/api/route-blocks'
-        : `https://boletos.dev-wit.com/api/route-blocks/${encodeURIComponent(editingBlockId)}`;
+        ? 'https://bcentinela.dev-wit.com/api/route-blocks'
+        : `https://bcentinela.dev-wit.com/api/route-blocks/${encodeURIComponent(editingBlockId)}`;
 
       const res = await fetch(url, {
         method: isCreate ? 'POST' : 'PUT',
@@ -476,7 +476,7 @@ const Rutas = () => {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://boletos.dev-wit.com/api/route-blocks/${encodeURIComponent(blockId)}`, {
+      const res = await fetch(`https://bcentinela.dev-wit.com/api/route-blocks/${encodeURIComponent(blockId)}`, {
         method: 'DELETE',
       });
       const body = await parseResponseSafe(res);
@@ -514,7 +514,7 @@ const Rutas = () => {
                   onClick={async () => {
                     setActualizando(true);
                     try {
-                      const res = await fetch('https://boletos.dev-wit.com/api/route-masters');
+                      const res = await fetch('https://bcentinela.dev-wit.com/api/route-masters');
                       const data = await res.json();
                       setRutas(Array.isArray(data) ? data : []);
                       showToast('Actualizado', 'Lista de rutas maestras sincronizada');
