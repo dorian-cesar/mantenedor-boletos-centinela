@@ -1,0 +1,67 @@
+body {
+  min-height: 100vh;
+  margin: 0;  
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  background: linear-gradient(to bottom right, rgba(235, 127, 51, 0.05), rgba(235, 127, 51, 0.1));
+  overflow-x: hidden;
+}
+
+.gradient-bg {
+  background: linear-gradient(to right, #ff5500, #ff5500cc, #003fa2);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.floating {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.text-login { color: #003fa2 !important; }
+.bg-flotante { background-color: #ff5500 !important; }
+.border-login { border-color: #ff5500 !important; }
+.btn-warning { background-color: #ff5500 !important; border-color: #ff5500 !important; }
+.btn-warning:hover { background-color: #ff5500 !important; border-color: #ff5500 !important; }
+
+.bus-icon {
+  fill: #003fa2;
+}
+
+.btn-cargando {
+  position: relative;
+}
+
+.spinner-border {
+  animation: spinner-border .75s linear infinite;
+}
+
+@keyframes spinner-border {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* Estilo para el botón de logout */
+#logoutBtn {
+  transition: all 0.3s ease;
+}
+
+#logoutBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Posicionamiento del botón */
+.text-end {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+}

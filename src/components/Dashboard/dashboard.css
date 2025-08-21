@@ -1,0 +1,118 @@
+.dashboard-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.main-content {
+  margin-left: 240px;              /* Para no tapar el sidebar */
+  padding: 2rem;
+  flex: 1;                         /* ¡Clave! Que ocupe el resto del ancho */
+  min-height: 100vh;
+  background-color: #f4f6f8;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;         /* Permite dividir secciones dentro */
+  gap: 2rem;                      /* Espacio entre divisiones internas */
+}
+
+.header {
+  margin-bottom: 2rem;
+}
+
+.header h1 {
+  font-size: 2rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.card-tile {
+  background-color: #fff;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.05);
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  text-decoration: none;
+  color: #111827;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.card-tile:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0,0,0,0.08);
+}
+
+.card-tile svg {
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  color: #3b82f6;
+}
+
+.card-tile h5 {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.card-tile p {
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.stats-box {
+  margin-top: 3rem;
+  background-color: #fff;
+  padding: 2rem;
+  border-radius: 1rem;
+  box-shadow: 0 6px 14px rgba(0,0,0,0.05);
+}
+
+.stats-box h6 {
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.stat-item:last-child {
+  border-bottom: none;
+}
+
+.chevron-icon {
+  transition: transform 0.2s ease;
+  display: inline-block;
+}
+
+.chevron-icon.rotated {
+  transform: rotate(90deg);
+}
+
+.sortable-ghost { opacity: .6; }
+.sortable-chosen { outline: 2px dashed var(--bs-primary); }
+.drag-handle { cursor: grab; }
+.drag-handle:active { cursor: grabbing; }
+
+/* Rotación suave del chevron si cambias a bi-chevron-right/down dentro del mismo botón */
+.chevron-icon { transition: transform .15s ease; }
+.table-hover tbody tr:hover > td { transition: background-color .12s ease; }
+
+.table th[role="button"] {
+  cursor: pointer;
+  user-select: none;
+}
+.table th[role="button"] i { margin-left: .25rem; }
+.table-hover tbody tr:hover > td { transition: background-color .12s ease; }
