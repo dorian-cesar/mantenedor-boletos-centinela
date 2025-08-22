@@ -15,7 +15,7 @@ const Rutas = () => {
   // Modal crear/editar ruta (solo para crear ahora; el botón de fila abre bloques)
   const [modalRutaVisible, setModalRutaVisible] = useState(false);
   const [rutaEditando, setRutaEditando] = useState(null); // se usa solo para PUT si reactivas edición
-  const [formRuta, setFormRuta] = useState({ city: '', origin: '', destination: '', stops: [] });
+  const [formRuta, setFormRuta] = useState({ name: '', origin: '', destination: '', stops: [] });
 
   // Catálogo de ciudades
   const [ciudades, setCiudades] = useState([]);
@@ -40,11 +40,11 @@ const Rutas = () => {
     const stops = routeMasterForBlocks?.stops || [];
     return [...stops]
       .sort((a, b) => (a.order || 0) - (b.order || 0))
-      .map(s => ({ city: s.city, order: s.order }));
+      .map(s => ({ name: s.name, order: s.order }));
   }, [routeMasterForBlocks]);
 
   const allowedRMStops = useMemo(
-    () => allowedRMStopOptions.map(s => s.city),
+    () => allowedRMStopOptions.map(s => s.name),
     [allowedRMStopOptions]
   );
 
@@ -66,7 +66,7 @@ const Rutas = () => {
       const list = body
       .map(l => ({
         _id: l._id,          
-        city: l.city,
+        name: l.name,
         pisos: l.pisos,
         capacidad: l.capacidad,
         columns: l.columns,
@@ -92,11 +92,11 @@ const Rutas = () => {
     const term = filtro.trim().toLowerCase();
     if (!term) return rutas;
     return rutas.filter(r => {
-      const city = (r?.city || '').toLowerCase();
-      const origen = (r?.stops?.[0]?.city || '').toLowerCase();
-      const destino = (r?.stops?.[r?.stops?.length - 1]?.city || '').toLowerCase();
-      const anyStop = (r?.stops || []).some(s => (s?.city || '').toLowerCase().includes(term));
-      return city.includes(term) || origen.includes(term) || destino.includes(term) || anyStop;
+      const name = (r?.name || '').toLowerCase();
+      const origen = (r?.stops?.[0]?.name || '').toLowerCase();
+      const destino = (r?.stops?.[r?.stops?.length - 1]?.name || '').toLowerCase();
+      const anyStop = (r?.stops || []).some(s => (s?.name || '').toLowerCase().includes(term));
+      return name.includes(term) || origen.includes(term) || destino.includes(term) || anyStop;
     });
   }, [rutas, filtro]);
 
@@ -116,7 +116,7 @@ const Rutas = () => {
   );
 
   const layoutLabel = (l) =>
-    `${l.city} • ${l.pisos ?? '-'} pisos • ${l.capacidad ?? '-'} pax • ${l.columns ?? '-'}×${l.rows ?? '-'}`;
+    `${l.name} • ${l.pisos ?? '-'} pisos • ${l.capacidad ?? '-'} pax • ${l.columns ?? '-'}×${l.rows ?? '-'}`;
 
   // Helpers
   const parseResponseSafe = async (res) => {
@@ -132,7 +132,7 @@ const Rutas = () => {
     setRouteMasterForBlocks(null);
     setBlockMode('view');
     setEditingBlockId(null);
-    setBlockForm({ city: '', stops: [] });
+    setBlockForm({ name: '', stops: [] });
     setBlockLayoutId('');
   }, []);
 
@@ -174,27 +174,58 @@ const Rutas = () => {
   // ---- CREAR (opcionalmente editar) RUTA MAESTRA ----
   const abrirModalNuevaRuta = () => {
     setRutaEditando(null);
-    setFormRuta({ city: '', origin: '', destination: '', stops: [] });
+    setFormRuta({ name: '', origin: '', destination: '', stops: [] });
     setModalRutaVisible(true);
   };
 
   const handleGuardarRuta = async () => {
     const esNuevaRuta = !rutaEditando;
 
-    const todasLasParadas = [
-      formRuta.origin,
-      ...(Array.isArray(formRuta.stops) ? formRuta.stops.map((s) => s.city) : []),
-      formRuta.destination,
-    ].filter((x) => typeof x === 'string' && x.trim());
+    // Verificar que haya al menos origen y destino
+    if (!formRuta.origin || !formRuta.destination) {
+      showToast('Datos incompletos', 'Debes seleccionar origen y destino', true);
+      return;
+    }
 
-    if (todasLasParadas.length < 2) {
+    // Construir el array de paradas correctamente
+    const todasLasParadas = [
+      { name: formRuta.origin, order: 1 }
+    ];
+
+    // Agregar paradas intermedias (si existen)
+    if (Array.isArray(formRuta.stops)) {
+      formRuta.stops.forEach((stop, index) => {
+        if (stop.city && stop.city.trim()) {
+          todasLasParadas.push({ 
+            name: stop.city, 
+            order: index + 2 // +2 porque el origen es order: 1
+          });
+        }
+      });
+    }
+
+    // Agregar destino al final
+    const ultimoOrder = todasLasParadas.length + 1;
+    todasLasParadas.push({ 
+      name: formRuta.destination, 
+      order: ultimoOrder 
+    });
+
+    // Filtrar paradas vacías
+    const paradasValidas = todasLasParadas.filter(parada => 
+      parada.name && typeof parada.name === 'string' && parada.name.trim()
+    );
+
+    if (paradasValidas.length < 2) {
       showToast('Datos incompletos', 'Debes seleccionar al menos origen y destino', true);
       return;
     }
 
-    const stopsConOrden = todasLasParadas.map((city, i) => ({ city, order: i + 1 }));
+    const dataAGuardar = { 
+      name: formRuta.name, 
+      stops: paradasValidas 
+    };
 
-    const dataAGuardar = { city: formRuta.city, stops: stopsConOrden };
     const endpoint = esNuevaRuta
       ? 'https://bcentinela.dev-wit.com/api/route-masters'
       : `https://bcentinela.dev-wit.com/api/route-masters/${encodeURIComponent(rutaEditando)}`;
@@ -206,6 +237,7 @@ const Rutas = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataAGuardar),
       });
+      
       const body = await parseResponseSafe(res);
 
       if (!res.ok) {
@@ -294,15 +326,15 @@ const Rutas = () => {
 
   // --- Blocks CRUD state ---
   const [blockMode, setBlockMode] = useState('view'); // 'view' | 'create' | 'edit'
-  const [blockForm, setBlockForm] = useState({ city: '', stops: [] }); // stops: [{ city, order }]
+  const [blockForm, setBlockForm] = useState({ name: '', stops: [] }); // stops: [{ name, order }]
   const [editingBlockId, setEditingBlockId] = useState(null);
 
   const canSave = useMemo(() => {
-  const cityOk = !!blockForm?.city?.trim();
-  const stopsArr = (blockForm?.stops || []).filter(s => s?.city?.trim());
-  const stopsOk = stopsArr.length >= 2 && stopsArr.every(s => allowedRMStops.includes(s.city));
+  const nameOk = !!blockForm?.name?.trim();
+  const stopsArr = (blockForm?.stops || []).filter(s => s?.name?.trim());
+  const stopsOk = stopsArr.length >= 2 && stopsArr.every(s => allowedRMStops.includes(s.name));
   const layoutOk = /^[a-f0-9]{24}$/i.test(String(blockLayoutId || '').trim());
-    return cityOk && stopsOk && layoutOk;
+    return nameOk && stopsOk && layoutOk;
   }, [blockForm, blockLayoutId, allowedRMStops]);
 
   // Totales de bloques por route master
@@ -340,8 +372,8 @@ const Rutas = () => {
       return;
     }
     setBlockForm(prev => {
-      const nextCity = allowedRMStops[0];
-      const next = [...(prev.stops || []), { city: nextCity, order: (prev.stops?.length || 0) + 1 }];
+      const nextName = allowedRMStops[0];
+      const next = [...(prev.stops || []), { name: nextName, order: (prev.stops?.length || 0) + 1 }];
       return { ...prev, stops: next };
     });
   };
@@ -357,7 +389,7 @@ const Rutas = () => {
   // Abrir creación de block
   const openCreateBlock = () => {
     setEditingBlockId(null);
-    setBlockForm({ city: '', stops: [] });
+    setBlockForm({ name: '', stops: [] });
     setBlockLayoutId('');           
     setBlockMode('create');
     fetchLayouts();                 
@@ -366,11 +398,11 @@ const Rutas = () => {
   const openEditBlock = (bloque) => {
     setEditingBlockId(bloque._id);
     setBlockForm({
-      city: bloque.city || '',
+      name: bloque.name || '',
       stops: (bloque.stops || [])
         .slice()
         .sort((a, b) => (a.order || 0) - (b.order || 0))
-        .map(s => ({ city: s.city, order: s.order })),
+        .map(s => ({ name: s.name, order: s.order })),
     });
     setBlockLayoutId(bloque?.layout?._id || bloque?.layoutId || bloque?.layout || '');
     setBlockMode('edit');
@@ -379,9 +411,9 @@ const Rutas = () => {
 
   useEffect(() => {
     if (blockMode !== 'view' && Array.isArray(blockForm.stops)) {
-      const filtered = blockForm.stops.filter(s => allowedRMStops.includes(s?.city));
+      const filtered = blockForm.stops.filter(s => allowedRMStops.includes(s?.name));
       if (filtered.length !== blockForm.stops.length) {
-        setBlockForm(p => ({ ...p, stops: filtered.map((s,i) => ({ city: s.city, order: i+1 })) }));
+        setBlockForm(p => ({ ...p, stops: filtered.map((s,i) => ({ name: s.name, order: i+1 })) }));
       }
     }
   }, [allowedRMStops, blockMode]); 
@@ -389,7 +421,7 @@ const Rutas = () => {
   // Cancelar formulario
   const cancelBlockForm = () => {
     setEditingBlockId(null);
-    setBlockForm({ city: '', stops: [] });
+    setBlockForm({ name: '', stops: [] });
     setBlockMode('view');
     setBlockLayoutId('');
   };
@@ -403,10 +435,10 @@ const Rutas = () => {
     }
 
     const stops = (blockForm.stops || [])
-      .filter(s => typeof s?.city === 'string' && s.city.trim())
-      .map((s, i) => ({ city: String(s.city).trim(), order: i + 1 }));
+      .filter(s => typeof s?.name === 'string' && s.name.trim())
+      .map((s, i) => ({ name: String(s.name).trim(), order: i + 1 }));
 
-    if (!blockForm.city?.trim() || stops.length < 2) {
+    if (!blockForm.name?.trim() || stops.length < 2) {
       showToast('Datos incompletos', 'Nombre del bloque y al menos 2 paradas.', true);
       return;
     }
@@ -416,7 +448,7 @@ const Rutas = () => {
       return;
     }
 
-    const invalid = stops.some(s => !allowedRMStops.includes(s.city));
+    const invalid = stops.some(s => !allowedRMStops.includes(s.name));
     if (invalid) {
       showToast('Paradas no válidas', 'Solo puedes usar ciudades definidas en la ruta maestra.', true);
       return;
@@ -424,7 +456,7 @@ const Rutas = () => {
 
     const payload = {
       routeMasterId,
-      city: blockForm.city.trim(),
+      name: blockForm.name.trim(),
       stops,                      
       layoutId: blockLayoutId.trim(),  
     };
@@ -600,8 +632,8 @@ const Rutas = () => {
                   )}
 
                   {rutasFiltradas.map((ruta) => {
-                    const origen = ruta?.stops?.[0]?.city || '';
-                    const destino = ruta?.stops?.[ruta.stops.length - 1]?.city || '';
+                    const origen = ruta?.stops?.[0]?.name || '';
+                    const destino = ruta?.stops?.[ruta.stops.length - 1]?.name || '';
                     const paradasPendientes = !Array.isArray(ruta?.stops);
                     const totalParadas = ruta?.stops?.length || 0;
                     const totalBloques = blocksCountMap[ruta._id];
@@ -621,7 +653,7 @@ const Rutas = () => {
                             </button>
                           </td>
 
-                          <td className="fw-semibold">{ruta.city}</td>
+                          <td className="fw-semibold">{ruta.name}</td>
                           <td>{origen}</td>
                           <td>{destino}</td>                          
                           <td>
@@ -698,9 +730,9 @@ const Rutas = () => {
                                       {[...(ruta.stops || [])]
                                         .sort((a, b) => (a.order || 0) - (b.order || 0))
                                         .map((stop) => (
-                                          <tr key={stop._id || `${stop.city}-${stop.order}`}>
+                                          <tr key={stop._id || `${stop.name}-${stop.order}`}>
                                             <td>{stop.order}</td>
-                                            <td>{stop.city}</td>
+                                            <td>{stop.name}</td>
                                           </tr>
                                         ))}
                                     </tbody>
@@ -745,7 +777,7 @@ const Rutas = () => {
       {/* MODAL: BLOQUES POR ROUTE MASTER */}
       <ModalBase
         visible={modalBlocksVisible}
-        title={`Bloques — ${routeMasterForBlocks?.city || ''}`}
+        title={`Bloques — ${routeMasterForBlocks?.name || ''}`}
         onClose={closeBlocksModal}
       >
         {blocksLoading && (
@@ -789,8 +821,8 @@ const Rutas = () => {
                     <label className="form-label fw-semibold mb-1">Nombre del bloque</label>
                     <input
                       className="form-control"
-                      value={blockForm.city}
-                      onChange={(e) => setBlockForm((p) => ({ ...p, city: e.target.value }))}
+                      value={blockForm.name}
+                      onChange={(e) => setBlockForm((p) => ({ ...p, name: e.target.value }))}
                       placeholder="Ej: Tramo Norte"
                     />
                   </div>
@@ -824,7 +856,7 @@ const Rutas = () => {
                     <div className="col-12">
                       <div className="alert alert-secondary py-2 mb-0">
                         <div className="small">
-                          <strong>{selectedLayout.city}</strong><br />
+                          <strong>{selectedLayout.name}</strong><br />
                           Pisos: {selectedLayout.pisos ?? '-'} · Capacidad: {selectedLayout.capacidad ?? '-'} ·{' '}
                           Disposición: {selectedLayout.columns ?? '-'} columnas × {selectedLayout.rows ?? '-'} filas<br />
                           Asientos P1: {selectedLayout.tipo_Asiento_piso_1 ?? '-'} ·{' '}
@@ -851,7 +883,7 @@ const Rutas = () => {
                     setList={(newOrder) =>
                       setBlockForm((p) => ({
                         ...p,
-                        stops: (newOrder || []).map((s, i) => ({ city: s.city || '', order: i + 1 })),
+                        stops: (newOrder || []).map((s, i) => ({ name: s.name || '', order: i + 1 })),
                       }))
                     }
                     animation={180}
@@ -861,7 +893,7 @@ const Rutas = () => {
                   >
                     {(blockForm.stops || []).map((s, idx) => (
                       <div
-                        key={`${idx}-${s?.city || 'stop'}`}
+                        key={`${idx}-${s?.name || 'stop'}`}
                         className="d-flex gap-2 align-items-center mb-2 p-2 border rounded bg-white"
                       >
                         {/* Asa de arrastre */}
@@ -876,20 +908,20 @@ const Rutas = () => {
                         {/* Selector de ciudad */}
                         <select
                           className="form-select form-select-sm flex-fill"
-                          value={s?.city || ''}
+                          value={s?.name || ''}
                           onChange={(e) => {
                             const v = e.target.value;
                             setBlockForm((p) => {
                               const arr = [...(p.stops || [])];
-                              arr[idx] = { city: v, order: idx + 1 };
+                              arr[idx] = { name: v, order: idx + 1 };
                               return { ...p, stops: arr };
                             });
                           }}
                         >
                           <option value="">Selecciona ciudad</option>
-                          {allowedRMStopOptions.map(({ city, order }) => (
-                            <option key={city} value={city}>
-                              {String(order).padStart(2, '0')} — {city}
+                          {allowedRMStopOptions.map(({ name, order }) => (
+                            <option key={name} value={name}>
+                              {String(order).padStart(2, '0')} — {name}
                             </option>
                           ))}
                         </select>
@@ -924,7 +956,7 @@ const Rutas = () => {
                     }}
                   >
                     <div className="small text-muted">
-                      {(blockForm.stops || []).filter(s => s?.city).length} paradas · layout: {selectedLayout?.city || '—'}
+                      {(blockForm.stops || []).filter(s => s?.name).length} paradas · layout: {selectedLayout?.name || '—'}
                     </div>
 
                     <div className="d-flex gap-2">
@@ -957,7 +989,7 @@ const Rutas = () => {
                   >
                     <div className="d-flex justify-content-between align-items-center mb-2">
                       <div className="d-flex align-items-center gap-2">
-                        <strong>{bloque.city}</strong>
+                        <strong>{bloque.name}</strong>
                         {isEditingThis && <span className="badge bg-primary">Editando…</span>}
                       </div>
                       <div className="d-flex align-items-center gap-2">
@@ -993,9 +1025,9 @@ const Rutas = () => {
                           {[...(bloque.stops || [])]
                             .sort((a, b) => (a.order || 0) - (b.order || 0))
                             .map((s) => (
-                              <tr key={s._id || `${s.city}-${s.order}`}>
+                              <tr key={s._id || `${s.name}-${s.order}`}>
                                 <td>{s.order}</td>
-                                <td>{s.city}</td>
+                                <td>{s.name}</td>
                               </tr>
                             ))}
                         </tbody>
