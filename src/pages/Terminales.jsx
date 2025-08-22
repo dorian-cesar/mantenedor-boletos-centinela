@@ -311,75 +311,70 @@ const Terminales = () => {
           }
         >
           <div className="row g-3">
-            <div className="col-md-6">
-              <label className="form-label">Nombre</label>
-              <input
-                type="text"
-                className="form-control"
-                value={formTerminal.name}
-                onChange={(e) => setFormTerminal({ ...formTerminal, name: e.target.value })}
-                placeholder="Ej: Terminal Alameda"
-                disabled={guardando}
-              />
-            </div>
-
-            <div className="col-md-6">
-              <label className="form-label">Ciudad</label>
-              <input
-                type="text"
-                className="form-control mb-2"
-                placeholder="Filtrar ciudades…"
-                value={filtroCiudad}
-                onChange={(e) => setFiltroCiudad(e.target.value)}
-                disabled={cargandoCiudades || guardando}
-              />
-              <select
-                className="form-select"
-                value={selectedCityId}
-                onChange={(e) => onSelectCiudad(e.target.value)}
-                disabled={cargandoCiudades || !!errorCiudades || guardando}
-              >
-                <option value="">
-                  {cargandoCiudades ? 'Cargando ciudades…' : 'Selecciona una ciudad'}
-                </option>
-                {ciudades
-                  .filter((c) =>
-                    c.name.toLowerCase().includes(filtroCiudad.toLowerCase())
-                  )
-                  .map((c) => (
-                    <option key={c._id} value={c._id}>
-                      {c.name} — {c.region}
-                    </option>
-                  ))}
-              </select>
-              {errorCiudades && (
-                <div className="form-text text-danger">{errorCiudades}</div>
-              )}
-            </div>
-
-            <div className="col-12">
-              <label className="form-label">Dirección</label>
-              <input
-                type="text"
-                className="form-control"
-                value={formTerminal.address}
-                onChange={(e) => setFormTerminal({ ...formTerminal, address: e.target.value })}
-                placeholder="Ej: Av. Libertador Bernardo O'Higgins 3850"
-                disabled={guardando}
-              />
-            </div>
-
-            <div className="col-md-6">
-              <label className="form-label">Región</label>
-              <input
-                type="text"
-                className="form-control"
-                value={formTerminal.region}
-                readOnly
-                disabled
-              />
-            </div>
+          {/* Nombre */}
+          <div className="col-12">
+            <label className="form-label">
+              <i className="bi bi-building me-1" /> Nombre
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              value={formTerminal.name}
+              onChange={(e) => setFormTerminal({ ...formTerminal, name: e.target.value })}
+              placeholder="Ej: Terminal Alameda"
+            />
+            <div className="form-text">Nombre oficial del terminal.</div>
           </div>
+
+          {/* Dirección */}
+          <div className="col-12">
+            <label className="form-label">
+              <i className="bi bi-signpost-2 me-1" /> Dirección
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              value={formTerminal.address}
+              onChange={(e) => setFormTerminal({ ...formTerminal, address: e.target.value })}
+              placeholder="Ej: Av. Libertador Bernardo O'Higgins 3850"
+            />
+            <div className="form-text">Calle, número y referencias principales.</div>
+          </div>
+
+          {/* Ciudad + Región */}
+          <div className="col-md-6">
+            <label className="form-label">
+              <i className="bi bi-geo-alt me-1" /> Ciudad
+            </label>
+            <select
+              className="form-select"
+              value={selectedCityId}
+              onChange={(e) => onSelectCiudad(e.target.value)}
+            >
+              <option value="">Selecciona una ciudad</option>
+              {ciudades.map((c) => (
+                <option key={c._id} value={c._id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <div className="form-text">Selecciona la ciudad donde está ubicado el terminal.</div>
+          </div>
+
+          <div className="col-md-6">
+            <label className="form-label">
+              <i className="bi bi-map me-1" /> Región
+            </label>
+            <input
+              type="text"
+              className="form-control"
+              value={formTerminal.region}
+              disabled
+              readOnly
+            />
+            <div className="form-text">Se completa automáticamente al elegir la ciudad.</div>
+          </div>
+        </div>
         </ModalBase>
       </main>
     </div>
