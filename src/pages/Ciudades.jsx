@@ -6,6 +6,9 @@ import { showToast } from '@components/Toast/Toast';
 import Swal from 'sweetalert2';
 import ModalBase from '@components/ModalBase/ModalBase';
 
+//const API_BASE_URL = "https://bcentinela.dev-wit.com/api"; 
+const API_BASE_URL = "http://localhost:3000/api";
+
 const Ciudades = () => {
   const [ciudades, setCiudades] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -32,7 +35,7 @@ const Ciudades = () => {
   useEffect(() => {
     const fetchCiudades = async () => {
       try {
-        const res = await fetch('https://bcentinela.dev-wit.com/api/cities');
+        const res = await fetch(`${API_BASE_URL}/cities`);
         const data = await res.json();
         setCiudades(data);
       } catch (error) {
@@ -66,8 +69,8 @@ const Ciudades = () => {
   const handleGuardar = async () => {
     const esNueva = !ciudadEditando;
     const url = esNueva
-      ? 'https://bcentinela.dev-wit.com/api/cities'
-      : `https://bcentinela.dev-wit.com/api/cities/${ciudadEditando}`;
+      ? `${API_BASE_URL}/cities`
+      : `${API_BASE_URL}/cities/${ciudadEditando}`;
     const metodo = esNueva ? 'POST' : 'PUT';
 
     try {
@@ -112,7 +115,7 @@ const Ciudades = () => {
     if (!confirm.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://bcentinela.dev-wit.com/api/cities/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/cities/${id}`, {
         method: 'DELETE'
       });
 
@@ -146,32 +149,10 @@ const Ciudades = () => {
                 onClick={async () => {
                   setActualizando(true);
                   try {
-                    const res = await fetch('https://bcentinela.dev-wit.com/api/cities');
+                    const res = await fetch(`${API_BASE_URL}/cities`);
                     const data = await res.json();
-
-                    setCiudades((prevCiudades) => {
-                      const nuevasCiudades = [];
-
-                      data.forEach((nuevaCiudad) => {
-                        const antigua = prevCiudades.find((c) => c._id === nuevaCiudad._id);
-
-                        const haCambiado =
-                          !antigua ||
-                          antigua.name !== nuevaCiudad.name ||
-                          antigua.region !== nuevaCiudad.region ||
-                          antigua.country !== nuevaCiudad.country;
-
-                        if (haCambiado || !antigua) {
-                          nuevasCiudades.push(nuevaCiudad);
-                        } else {
-                          nuevasCiudades.push(antigua);
-                        }
-                      });
-
-                      return nuevasCiudades;
-                    });
-
-                    showToast('Actualizado', 'Se sincronizó la lista de ciudades con el servidor');
+                    setCiudades(data);
+                    showToast('Actualizado', 'Lista de ciudades actualizada');
                   } catch (err) {
                     console.error(err);
                     showToast('Error al actualizar', err.message || 'No se pudo actualizar la lista de ciudades', true);
@@ -235,28 +216,23 @@ const Ciudades = () => {
         </div>
       </main>
 
+      {/* MODAL */}
       <ModalBase
         visible={modalVisible}
         title={ciudadEditando ? 'Editar ciudad' : 'Nueva ciudad'}
-        onClose={() => {
-          setModalVisible(false);
-          setCiudadEditando(null);
-          setFormCiudad({ name: '', region: '', country: '' });
-          setUsarRegionManual(false);
-          setUsarPaisManual(false);
-        }}
+        onClose={resetFormularioCiudad}
         footer={
           <>
             <button className="btn btn-secondary" onClick={resetFormularioCiudad}>
               Cancelar
             </button>
-
             <button className="btn btn-primary" onClick={handleGuardar}>
               Guardar
             </button>
           </>
         }
       >
+        {/* FORMULARIO */}
         <div className="mb-3">
           <label className="form-label">Nombre</label>
           <input
@@ -276,13 +252,7 @@ const Ciudades = () => {
               className="form-control"
               placeholder="Escribe una nueva región"
               value={formCiudad.region}
-              onChange={(e) => {
-                const valor = e.target.value;
-                setFormCiudad({ ...formCiudad, region: valor });
-                if (valor.trim() === '') {
-                  setUsarRegionManual(false);
-                }
-              }}
+              onChange={(e) => setFormCiudad({ ...formCiudad, region: e.target.value })}
             />
           ) : (
             <select
@@ -318,13 +288,7 @@ const Ciudades = () => {
               className="form-control"
               placeholder="Escribe un nuevo país"
               value={formCiudad.country}
-              onChange={(e) => {
-                const valor = e.target.value;
-                setFormCiudad({ ...formCiudad, country: valor });
-                if (valor.trim() === '') {
-                  setUsarPaisManual(false);
-                }
-              }}
+              onChange={(e) => setFormCiudad({ ...formCiudad, country: e.target.value })}
             />
           ) : (
             <select

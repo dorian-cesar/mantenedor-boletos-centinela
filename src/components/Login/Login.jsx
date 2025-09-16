@@ -1,9 +1,12 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import '@components/Login/login.css';
 import { showToast } from '@components/Toast/Toast';
 import { useNavigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
+
+//const API_URL = "https://bcentinela.dev-wit.com/api";
+const API_URL = "http://localhost:3000/api";
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -12,7 +15,7 @@ function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const API_TIMEOUT = 10000;
-  const navigate = useNavigate();  
+  const navigate = useNavigate();
 
   useEffect(() => {
     const recordarSession = localStorage.getItem('recordarSession');
@@ -69,7 +72,7 @@ function Login() {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
 
-      const respuesta = await fetch('https://bcentinela.dev-wit.com/api/users/login', {
+      const respuesta = await fetch(`${API_URL}/auth/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(datos),
@@ -99,7 +102,8 @@ function Login() {
       const resultado = await respuesta.json();
       if (!resultado.token || !resultado.user) throw new Error('Respuesta inválida del servidor.');
 
-      if (resultado.user.role !== 'admin') {
+      // Permitir admin o superAdmin
+      if (resultado.user.role !== 'admin' && resultado.user.role !== 'superAdmin') {
         showToast("Acceso denegado", "Tu cuenta no cumple con los requisitos para acceder a esta sección.", true);
         setLoading(false);
         return;
@@ -107,7 +111,7 @@ function Login() {
 
       saveSessionData(resultado.token, resultado.user, rememberMe);
       navigate('/dashboard');
-      
+
     } catch (error) {
       sessionStorage.removeItem('token');
       sessionStorage.removeItem('user');

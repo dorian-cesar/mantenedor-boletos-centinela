@@ -1,9 +1,12 @@
-
 import React, { useEffect, useState } from 'react';
 import Sidebar from '@components/Sidebar/Sidebar';
 import '@components/Dashboard/dashboard.css';
 import ModalBase from '@components/ModalBase/ModalBase';
 import { showToast } from '@components/Toast/Toast';
+
+//const API_URL = "https://bcentinela.dev-wit.com/api";
+const API_URL = "http://localhost:3000/api"; // dev
+const USERS_ENDPOINT = `${API_URL}/users`;
 
 const Usuarios = () => {
   const [usuarios, setUsuarios] = useState([]);
@@ -36,12 +39,12 @@ const Usuarios = () => {
 
     try {
       const url = modoEdicion
-        ? `https://bcentinela.dev-wit.com/api/users/${usuarioEditandoId}`
-        : 'https://bcentinela.dev-wit.com/api/users/register';
+        ? `${USERS_ENDPOINT}/${usuarioEditandoId}`
+        : `${USERS_ENDPOINT}/register`;
 
       const method = modoEdicion ? 'PUT' : 'POST';
       const bodyData = { ...formData };
-      if (modoEdicion) delete bodyData.password; // No se actualiza contraseña
+      if (modoEdicion) delete bodyData.password; // No se actualiza contraseña en edición
 
       const res = await fetch(url, {
         method,
@@ -86,7 +89,7 @@ const Usuarios = () => {
         }
       }
 
-      const res = await fetch("https://bcentinela.dev-wit.com/api/users/", {
+      const res = await fetch(USERS_ENDPOINT, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -98,7 +101,13 @@ const Usuarios = () => {
       }
 
       const data = await res.json();
-      setUsuarios(Array.isArray(data) ? data : []);
+
+      // ✅ Adaptado a la nueva respuesta { items: [] }
+      if (Array.isArray(data.items)) {
+        setUsuarios(data.items);
+      } else {
+        setUsuarios([]);
+      }
     } catch (error) {
       console.error("Error al cargar usuarios:", error);
       setUsuarios([]);
@@ -142,7 +151,7 @@ const Usuarios = () => {
       name: usuario.name,
       email: usuario.email,
       role: usuario.role,
-      password: '', // no se muestra
+      password: '',
     });
     setModalVisible(true);
   };
@@ -153,7 +162,7 @@ const Usuarios = () => {
     const token = sessionStorage.getItem("token") || JSON.parse(localStorage.getItem("recordarSession") || '{}').token;
 
     try {
-      const res = await fetch(`https://bcentinela.dev-wit.com/api/users/${id}`, {
+      const res = await fetch(`${USERS_ENDPOINT}/${id}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`
@@ -203,7 +212,7 @@ const Usuarios = () => {
                         }
                       }
 
-                      const res = await fetch("https://bcentinela.dev-wit.com/api/users/", {
+                      const res = await fetch(USERS_ENDPOINT, {
                         headers: {
                           Authorization: `Bearer ${token}`,
                           'Content-Type': 'application/json'
@@ -214,24 +223,7 @@ const Usuarios = () => {
 
                       const data = await res.json();
 
-                      setUsuarios((prevUsuarios) => {
-                        const nuevos = [];
-
-                        data.forEach((nuevo) => {
-                          const antiguo = prevUsuarios.find(u => u._id === nuevo._id);
-                          const haCambiado =
-                            !antiguo ||
-                            antiguo.name !== nuevo.name ||
-                            antiguo.email !== nuevo.email ||
-                            antiguo.role !== nuevo.role;
-
-                          nuevos.push(haCambiado || !antiguo ? nuevo : antiguo);
-                        });
-
-                        // Eliminar usuarios que ya no existen
-                        return nuevos;
-                      });
-
+                      setUsuarios(Array.isArray(data.items) ? data.items : []);
                       showToast("Actualizado", "Lista de usuarios sincronizada correctamente.");
                     } catch (err) {
                       console.error(err);
@@ -333,7 +325,7 @@ const Usuarios = () => {
 
       <ModalBase
         visible={modalVisible}
-        title="Crear Nuevo Usuario"
+        title={modoEdicion ? "Editar Usuario" : "Crear Nuevo Usuario"}
         onClose={() => setModalVisible(false)}
         size="lg"
         footer={
@@ -366,10 +358,12 @@ const Usuarios = () => {
               <option value="caja">Caja</option>
             </select>
           </div>
-          <div className="mt-4">
-            <label className="form-label">Contraseña</label>
-            <input type="password" name="password" className="form-control" placeholder="Mínimo 8 caracteres" value={formData.password} onChange={handleInputChange} />
-          </div>
+          {!modoEdicion && (
+            <div className="mt-4">
+              <label className="form-label">Contraseña</label>
+              <input type="password" name="password" className="form-control" placeholder="Mínimo 8 caracteres" value={formData.password} onChange={handleInputChange} />
+            </div>
+          )}
         </form>
       </ModalBase>
     </>
