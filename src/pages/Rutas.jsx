@@ -4,49 +4,66 @@ import '@components/Dashboard/dashboard.css';
 import { Spinner } from 'react-bootstrap';
 import { showToast } from '@components/Toast/Toast';
 import ModalBase from '@components/ModalBase/ModalBase';
-import RutaEditor from '@components/RutaEditor/RutaEditor';
 import Swal from 'sweetalert2';
 
 //const API_URL = "https://bcentinela.dev-wit.com/api";
 const API_URL = "http://localhost:3000/api"; // dev
+const ROUTES_ENDPOINT = `${API_URL}/route-masters`;
 
-const ROUTES_ENDPOINT = `${API_URL}/routemasters`;
+/** Utils */
+const pad2 = (n) => String(n).padStart(2, '0');
+const hhmmToMin = (hhmm) => {
+  if (!hhmm || !/^\d{2}:\d{2}$/.test(hhmm)) return null;
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+};
+const minutesToTimeString = (mins) => {
+  if (typeof mins !== 'number' || Number.isNaN(mins)) return '';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${pad2(h)}:${pad2(m)}`;
+};
+const minutesToHhMm = (mins) => {
+  if (typeof mins !== 'number' || Number.isNaN(mins)) return '';
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${h}h ${m}m`;
+};
 
 const Rutas = () => {
   const [rutas, setRutas] = useState([]);
   const [cargando, setCargando] = useState(true);
 
+  // Modal crear/editar
   const [modalRutaVisible, setModalRutaVisible] = useState(false);
   const [rutaEditando, setRutaEditando] = useState(null);
+
   const [formRuta, setFormRuta] = useState({
+    name: '',
     origin: '',
     destination: '',
     startTime: '',
-    durationMinutes: '',
     direction: '',
-    stops: []
+    durationMinutes: 0,
+    stops: [
+      { name: '', order: 1, offsetMinutes: 0, price: 0 },
+      { name: '', order: 2, offsetMinutes: 0, price: 0 },
+    ],
   });
 
   const [rutasExpandida, setRutasExpandida] = useState(null);
   const [filtro, setFiltro] = useState('');
 
-  const rutasFiltradas = useMemo(() => {
-    const term = filtro.trim().toLowerCase();
-    if (!term) return rutas;
-    return rutas.filter(r =>
-      (r.origin || '').toLowerCase().includes(term) ||
-      (r.destination || '').toLowerCase().includes(term) ||
-      (r.direction || '').toLowerCase().includes(term)
-    );
-  }, [rutas, filtro]);
-
-  const isExpanded = (id) => rutasExpandida === id;
-
-  // ---- CARGA INICIAL RUTAS ----
+  /** Carga inicial */
   useEffect(() => {
     const fetchRutas = async () => {
       try {
-        const res = await fetch(ROUTES_ENDPOINT);
+        const res = await fetch(ROUTES_ENDPOINT, {
+          headers: {
+            "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+          },
+        });
+
         const data = await res.json();
         setRutas(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -62,57 +79,151 @@ const Rutas = () => {
     setRutasExpandida((prev) => (prev === rutaId ? null : rutaId));
   };
 
-  // ---- CREAR / EDITAR RUTA ----
+  /** Crear / Editar */
   const abrirModalNuevaRuta = () => {
     setRutaEditando(null);
-    setFormRuta({ origin: '', destination: '', startTime: '', durationMinutes: '', direction: '', stops: [] });
+    setFormRuta({
+      name: '',
+      origin: '',
+      destination: '',
+      startTime: '', // string para el input time
+      direction: '',
+      durationMinutes: 0,
+      stops: [
+        { name: '', order: 1, offsetMinutes: 0, price: 0 },
+        { name: '', order: 2, offsetMinutes: 0, price: 0 },
+      ],
+    });
     setModalRutaVisible(true);
   };
 
-  const handleGuardarRuta = async () => {
-    const esNuevaRuta = !rutaEditando;
+  const handleStopChange = (index, field, value) => {
+    setFormRuta((prev) => {
+      const next = [...prev.stops];
+      const parsed =
+        field === 'offsetMinutes' || field === 'segmentPrice'
+          ? Number(value) || 0
+          : value;
+      next[index] = { ...next[index], [field]: parsed };
+      return { ...prev, stops: next };
+    });
+  };
 
-    if (!formRuta.origin || !formRuta.destination) {
-      showToast('Datos incompletos', 'Debes ingresar origen y destino', true);
+  const agregarParada = () => {
+    setFormRuta((prev) => {
+      const nextOrder = (prev.stops?.length || 0) + 1;
+      return {
+        ...prev,
+        stops: [
+          ...prev.stops,
+          { stop: '', order: nextOrder, offsetMinutes: 0, segmentPrice: 0 },
+        ],
+      };
+    });
+  };
+
+  const eliminarParada = (index) => {
+    setFormRuta((prev) => {
+      const filtered = prev.stops.filter((_, i) => i !== index);
+      // Recalcular "order"
+      const reindexed = filtered.map((s, i) => ({ ...s, order: i + 1 }));
+      return { ...prev, stops: reindexed };
+    });
+  };
+
+  const handleGuardarRuta = async () => {
+    // 🔹 Validaciones mínimas
+    if (!formRuta.origin.trim() || !formRuta.destination.trim()) {
+      showToast('Datos incompletos', 'Debes ingresar origen y destino.', true);
+      return;
+    }
+    if (!formRuta.startTime) {
+      showToast('Datos incompletos', 'Debes ingresar la hora de salida base.', true);
+      return;
+    }
+    if (!formRuta.direction) {
+      showToast('Datos incompletos', 'Debes seleccionar la dirección (subida/bajada).', true);
+      return;
+    }
+    if (!formRuta.stops || formRuta.stops.length < 2) {
+      showToast('Datos incompletos', 'Debes agregar al menos 2 paradas (origen y destino).', true);
       return;
     }
 
-    const dataAGuardar = { ...formRuta };
+    const stopsLimpias = formRuta.stops
+      .map((s, i) => ({
+        name: (s.name || '').trim(),
+        order: i + 1,
+        offsetMinutes: Number(s.offsetMinutes) || 0,
+        price: Number(s.price) || 0,
+      }
+      ))
+      .filter((s) => s.name);
 
-    const endpoint = esNuevaRuta
+    if (stopsLimpias.length < 2) {
+      showToast('Datos incompletos', 'Cada parada debe tener nombre y offset válido.', true);
+      return;
+    }
+
+    const durationMinutes =
+      Number(formRuta.durationMinutes) > 0
+        ? Number(formRuta.durationMinutes)
+        : stopsLimpias[stopsLimpias.length - 1].offsetMinutes;
+
+    const startTime = hhmmToMin(formRuta.startTime);
+    if (startTime == null) {
+      showToast('Datos inválidos', 'La hora de salida no tiene formato válido.', true);
+      return;
+    }
+
+    const payload = {
+      name: formRuta.name.trim(),
+      origin: formRuta.origin.trim(),
+      destination: formRuta.destination.trim(),
+      startTime,
+      durationMinutes,
+      direction: formRuta.direction,
+      stops: stopsLimpias,
+    };
+
+    const esNueva = !rutaEditando;
+    const endpoint = esNueva
       ? ROUTES_ENDPOINT
       : `${ROUTES_ENDPOINT}/${encodeURIComponent(rutaEditando)}`;
-    const metodo = esNuevaRuta ? 'POST' : 'PUT';
+    const method = esNueva ? "POST" : "PUT";
 
     try {
       const res = await fetch(endpoint, {
-        method: metodo,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataAGuardar),
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
       });
 
       const body = await res.json();
-
       if (!res.ok) {
-        const msg = body?.message || `${res.status} ${res.statusText}`;
+        const msg = body?.error || body?.message || `${res.status} ${res.statusText}`;
         throw new Error(msg);
       }
 
       const rutaGuardada = body;
-      setRutas(prev =>
-        esNuevaRuta
+      setRutas((prev) =>
+        esNueva
           ? [...prev, rutaGuardada]
-          : prev.map(t => (t._id === rutaEditando ? rutaGuardada : t))
+          : prev.map((r) => (r._id === rutaEditando ? rutaGuardada : r))
       );
+
       showToast(
-        esNuevaRuta ? 'Ruta creada' : 'Ruta actualizada',
-        esNuevaRuta ? 'Se creó correctamente' : 'Cambios guardados'
+        esNueva ? "Ruta creada" : "Ruta actualizada",
+        esNueva ? "Se creó correctamente" : "Cambios guardados"
       );
       setModalRutaVisible(false);
       setRutaEditando(null);
     } catch (err) {
       console.error(err);
-      showToast('Error', err.message || 'No se pudo guardar la ruta', true);
+      showToast("Error", err.message || "No se pudo guardar la ruta", true);
     }
   };
 
@@ -126,12 +237,14 @@ const Rutas = () => {
       cancelButtonColor: '#d33',
       confirmButtonText: 'Sí, eliminar',
     });
-
     if (!result.isConfirmed) return;
 
     try {
       const res = await fetch(`${ROUTES_ENDPOINT}/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
+        method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
       });
       if (!res.ok) throw new Error('Error al eliminar');
 
@@ -142,6 +255,35 @@ const Rutas = () => {
       await Swal.fire('Error', 'No se pudo eliminar la ruta', 'error');
     }
   };
+
+  /** Filtro robusto (name/origin/destination/direction + paradas por nombre) */
+  const rutasFiltradas = useMemo(() => {
+    const term = filtro.trim().toLowerCase();
+    if (!term) return rutas;
+    return rutas.filter((r) => {
+      const name = (r.name || '').toLowerCase();
+      const origin = r.origin;
+      const destination = r.destination;
+      const startTime = minutesToTimeString(r.startTime);
+      const durationMinutes = r.durationMinutes;
+      const direction = r.direction;
+      const originLc = (origin || '').toLowerCase();
+      const destLc = (destination || '').toLowerCase();
+      const dirLc = (direction || '').toLowerCase();
+      const hasStopName = (r.stops || []).some((s) =>
+        (s.name || '').toLowerCase().includes(term)
+      );
+      return (
+        name.includes(term) ||
+        originLc.includes(term) ||
+        destLc.includes(term) ||
+        dirLc.includes(term) ||
+        hasStopName
+      );
+    });
+  }, [rutas, filtro]);
+
+  const isExpanded = (id) => rutasExpandida === id;
 
   return (
     <div className="dashboard-container">
@@ -161,7 +303,11 @@ const Rutas = () => {
                   className="btn btn-outline-secondary"
                   onClick={async () => {
                     try {
-                      const res = await fetch(ROUTES_ENDPOINT);
+                      const res = await fetch(ROUTES_ENDPOINT, {
+                        headers: {
+                          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+                        },
+                      });
                       const data = await res.json();
                       setRutas(Array.isArray(data) ? data : []);
                       showToast('Actualizado', 'Lista de rutas sincronizada');
@@ -184,7 +330,7 @@ const Rutas = () => {
               <span className="input-group-text"><i className="bi bi-search" /></span>
               <input
                 className="form-control"
-                placeholder="Buscar por origen, destino o dirección…"
+                placeholder="Buscar por nombre, origen, destino o dirección…"
                 value={filtro}
                 onChange={(e) => setFiltro(e.target.value)}
               />
@@ -207,8 +353,7 @@ const Rutas = () => {
                 <thead className="table-light">
                   <tr>
                     <th></th>
-                    <th>Origen</th>
-                    <th>Destino</th>
+                    <th>Nombre / Origen → Destino</th>
                     <th>Inicio</th>
                     <th>Duración</th>
                     <th>Dirección</th>
@@ -219,14 +364,12 @@ const Rutas = () => {
                 <tbody>
                   {rutasFiltradas.length === 0 && (
                     <tr>
-                      <td colSpan={8}>Sin resultados</td>
+                      <td colSpan={7}>Sin resultados</td>
                     </tr>
                   )}
 
                   {rutasFiltradas.map((ruta) => {
                     const totalParadas = ruta?.stops?.length || 0;
-                    const duracion = `${Math.floor(ruta.durationMinutes / 60)}h ${ruta.durationMinutes % 60}m`;
-
                     return (
                       <React.Fragment key={ruta._id}>
                         <tr className={isExpanded(ruta._id) ? 'table-active' : ''}>
@@ -235,21 +378,54 @@ const Rutas = () => {
                               className="btn btn-sm btn-outline-secondary"
                               onClick={() => toggleExpandirRuta(ruta._id)}
                             >
-                              <i className={`bi ${isExpanded(ruta._id) ? 'bi-chevron-down' : 'bi-chevron-right'}`} />
+                              <i
+                                className={`bi ${
+                                  isExpanded(ruta._id) ? 'bi-chevron-down' : 'bi-chevron-right'
+                                }`}
+                              />
                             </button>
                           </td>
-                          <td>{ruta.origin}</td>
-                          <td>{ruta.destination}</td>
-                          <td>{ruta.startTime}</td>
-                          <td>{duracion}</td>
-                          <td>{ruta.direction}</td>
+                          <td className="fw-semibold">
+                            {ruta.name ? ruta.name : `${ruta.origin || '—'} → ${ruta.destination || '—'}`}
+                          </td>
+                          <td>{ruta.startTime != null ? minutesToTimeString(ruta.startTime) : '—'}</td>
+                          <td>
+                            {ruta.durationMinutes != null
+                              ? minutesToHhMm(ruta.durationMinutes)
+                              : '—'}
+                          </td>
+                          <td>{ruta.direction || '—'}</td>
                           <td>
                             <span className="badge bg-info-subtle text-info-emphasis border">
-                              {totalParadas}
+                              {ruta.stops?.length || 0}
                             </span>
                           </td>
                           <td>
                             <div className="btn-group btn-group-sm">
+                              <button
+                                className="btn btn-outline-primary"
+                                onClick={() => {
+                                  setRutaEditando(ruta._id);
+                                  setFormRuta({
+                                    name: ruta.name || '',
+                                    origin: ruta.origin || '',
+                                    destination: ruta.destination || '',
+                                    startTime: ruta.startTime != null ? minutesToTimeString(ruta.startTime) : '',
+                                    direction: ruta.direction || '',
+                                    durationMinutes: ruta.durationMinutes || 0,
+                                    stops: (ruta.stops || []).map((s, i) => ({
+                                      name: s.name || '',
+                                      order: i + 1,
+                                      offsetMinutes: s.offsetMinutes || 0,
+                                      price: s.price || 0,
+                                    })),
+                                  });
+                                  setModalRutaVisible(true);
+                                }}
+                              >
+                                <i className="bi bi-pencil" /> Editar
+                              </button>
+
                               <button
                                 className="btn btn-outline-danger"
                                 onClick={() => handleEliminar(ruta._id)}
@@ -262,31 +438,35 @@ const Rutas = () => {
 
                         {isExpanded(ruta._id) && (
                           <tr>
-                            <td colSpan={8}>
+                            <td colSpan={7}>
                               <div className="p-2 border rounded bg-light">
                                 <h6>Paradas</h6>
-                                <table className="table table-sm mb-0">
-                                  <thead>
-                                    <tr>
-                                      <th>#</th>
-                                      <th>ID Parada</th>
-                                      <th>Offset (min)</th>
-                                      <th>Precio</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {[...(ruta.stops || [])]
-                                      .sort((a, b) => (a.order || 0) - (b.order || 0))
-                                      .map((stop) => (
-                                        <tr key={stop._id}>
-                                          <td>{stop.order}</td>
-                                          <td>{stop.stop}</td>
-                                          <td>{stop.offsetMinutes}</td>
-                                          <td>{stop.segmentPrice}</td>
-                                        </tr>
-                                      ))}
-                                  </tbody>
-                                </table>
+                                {ruta.stops?.length > 0 ? (
+                                  <table className="table table-sm mb-0">
+                                    <thead>
+                                      <tr>
+                                        <th>#</th>
+                                        <th>Nombre</th>
+                                        <th>Offset (min)</th>
+                                        <th>Precio</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {[...(ruta.stops || [])]
+                                        .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                        .map((stop, i) => (
+                                          <tr key={stop._id || i}>
+                                            <td>{stop.order}</td>
+                                            <td>{stop.name || '—'}</td>
+                                            <td>{stop.offsetMinutes}</td>
+                                            <td>{stop.price}</td>
+                                          </tr>
+                                        ))}
+                                    </tbody>
+                                  </table>
+                                ) : (
+                                  <p className="text-muted mb-0">No hay paradas registradas.</p>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -301,6 +481,7 @@ const Rutas = () => {
         </div>
       </main>
 
+      {/* MODAL NUEVA RUTA - usando el esquema clásico por la validación actual del backend */}
       <ModalBase
         visible={modalRutaVisible}
         title={rutaEditando ? 'Editar Ruta' : 'Nueva Ruta'}
@@ -319,7 +500,146 @@ const Rutas = () => {
           </>
         }
       >
-        <RutaEditor formRuta={formRuta} setFormRuta={setFormRuta} />
+        {/* Nombre de la ruta */}
+        <div className="mb-3">
+          <label className="form-label">Nombre de la ruta</label>
+          <input
+            type="text"
+            className="form-control"
+            value={formRuta.name}
+            onChange={(e) =>
+              setFormRuta((prev) => ({ ...prev, name: e.target.value }))
+            }
+            placeholder="Ej: Ovalle - Minera Centinela"
+          />
+        </div>
+
+        {/* Origen */}
+        <div className="mb-3">
+          <label className="form-label">Origen</label>
+          <input
+            type="text"
+            className="form-control"
+            value={formRuta.origin}
+            onChange={(e) =>
+              setFormRuta((prev) => ({ ...prev, origin: e.target.value }))
+            }
+            placeholder="Ej: Ovalle"
+          />
+        </div>
+
+        {/* Destino */}
+        <div className="mb-3">
+          <label className="form-label">Destino</label>
+          <input
+            type="text"
+            className="form-control"
+            value={formRuta.destination}
+            onChange={(e) =>
+              setFormRuta((prev) => ({ ...prev, destination: e.target.value }))
+            }
+            placeholder="Ej: Minera Centinela"
+          />
+        </div>
+
+        {/* Campos globales */}
+        <div className="row g-2 mb-3">
+          <div className="col-md-6">
+            <label className="form-label">Hora de Salida Base</label>
+            <input
+              type="time"
+              className="form-control"
+              value={formRuta.startTime}
+              onChange={(e) =>
+                setFormRuta((prev) => ({ ...prev, startTime: e.target.value }))
+              }
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Dirección</label>
+            <select
+              className="form-select"
+              value={formRuta.direction}
+              onChange={(e) =>
+                setFormRuta((prev) => ({ ...prev, direction: e.target.value }))
+              }
+            >
+              <option value="">Seleccione...</option>
+              <option value="subida">Subida</option>
+              <option value="bajada">Bajada</option>
+            </select>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Duración (minutos)</label>
+            <input
+              type="number"
+              className="form-control"
+              value={formRuta.durationMinutes || ''}
+              onChange={(e) =>
+                setFormRuta((prev) => ({
+                  ...prev,
+                  durationMinutes: Number(e.target.value) || 0,
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        {/* Paradas */}
+        <h6>Paradas</h6>
+        {formRuta.stops.map((stop, index) => (
+          <div key={index} className="border p-2 rounded mb-2">
+            <div className="row g-2">
+              <div className="col-md-4">
+                <label className="form-label">Nombre</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={stop.name}
+                  onChange={(e) => handleStopChange(index, 'name', e.target.value)}
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Offset (minutos)</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={stop.offsetMinutes}
+                  onChange={(e) =>
+                    handleStopChange(index, 'offsetMinutes', e.target.value)
+                  }
+                />
+              </div>
+              <div className="col-md-4">
+                <label className="form-label">Precio</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={stop.price}
+                  onChange={(e) =>
+                    handleStopChange(index, 'price', e.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="mt-2 d-flex justify-content-end">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-danger"
+                onClick={() => eliminarParada(index)}
+                disabled={formRuta.stops.length <= 1}
+              >
+                <i className="bi bi-trash" /> Eliminar parada
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {/* Botón para agregar paradas */}
+        <button className="btn btn-outline-primary w-100" onClick={agregarParada}>
+          + Agregar Parada
+        </button>
       </ModalBase>
     </div>
   );
