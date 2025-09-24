@@ -30,6 +30,16 @@ const minutesToHhMm = (mins) => {
   const m = mins % 60;
   return `${h}h ${m}m`;
 };
+
+const formatCLP = (value) => {
+  if (typeof value !== "number" || isNaN(value)) return "$0";
+  return new Intl.NumberFormat("es-CL", {
+    style: "currency",
+    currency: "CLP",
+    minimumFractionDigits: 0,
+  }).format(value);
+};
+
 const formatHoraConDia = (start, offset = 0) => {
   const total = start + offset;
   const diaExtra = Math.floor(total / 1440); // 1440 min = 24h
@@ -519,7 +529,7 @@ const Rutas = () => {
                                               <br />
                                               <small className="text-muted">({stop.offsetMinutes} min)</small>
                                             </td>
-                                            <td>{stop.price}</td>
+                                            <td>{formatCLP(stop.price)}</td>
                                           </tr>
                                         ))}
                                     </tbody>
@@ -574,62 +584,55 @@ const Rutas = () => {
           />
         </div>
 
-        {/* Origen */}
-        <div className="mb-3">
-          <label className="form-label">Origen</label>
-          <input
-            type="text"
-            className="form-control"
-            value={formRuta.origin}
-            onChange={(e) =>
-              setFormRuta((prev) => ({ ...prev, origin: e.target.value }))
-            }
-            placeholder="Ej: Ovalle"
-          />
-        </div>
-
-        <div className="col-md-6">
-          <label className="form-label">Precio Origen</label>
-          <input
-            type="number"
-            min="0"
-            className="form-control"
-            value={formRuta.originPrice || 0}
-            onChange={(e) =>
-              setFormRuta((prev) => ({ ...prev, originPrice: Number(e.target.value) || 0 }))
-            }
-          />
-        </div>
-
-        {/* Destino */}
-        <div className="mb-3">
-          <label className="form-label">Destino</label>
-          <input
-            type="text"
-            className="form-control"
-            value={formRuta.destination}
-            onChange={(e) =>
-              setFormRuta((prev) => ({ ...prev, destination: e.target.value }))
-            }
-            placeholder="Ej: Minera Centinela"
-          />
-        </div>
-
-        {/* Campos globales */}
-        <div className="row g-2 mb-3">
+       {/* Origen + Precio Origen en la misma fila */}
+        <div className="row">
           <div className="col-md-6">
-            <label className="form-label">Hora de Salida Base</label>
+            <label className="form-label">Origen</label>
             <input
-              type="time"
+              type="text"
               className="form-control"
-              value={formRuta.startTime}
+              value={formRuta.origin}
               onChange={(e) =>
-                setFormRuta((prev) => ({ ...prev, startTime: e.target.value }))
+                setFormRuta((prev) => ({ ...prev, origin: e.target.value }))
+              }
+              placeholder="Ej: Ovalle"
+            />
+          </div>
+
+          <div className="col-md-6">
+            <label className="form-label">Precio Origen</label>
+            <input
+              type="number"
+              min="0"
+              className="form-control"
+              value={formRuta.originPrice || 0}
+              onChange={(e) =>
+                setFormRuta((prev) => ({
+                  ...prev,
+                  originPrice: Number(e.target.value) || 0,
+                }))
               }
             />
           </div>
-          <div className="col-md-6">
-            <label className="form-label">Dirección</label>
+        </div>
+
+        {/* Destino + Dirección en la misma fila */}
+        <div className="row mb-3">
+          <div className="col-md-6 mb-3">
+            <label className="form-label mt-2">Destino</label>
+            <input
+              type="text"
+              className="form-control"
+              value={formRuta.destination}
+              onChange={(e) =>
+                setFormRuta((prev) => ({ ...prev, destination: e.target.value }))
+              }
+              placeholder="Ej: Minera Centinela"
+            />
+          </div>
+
+          <div className="col-md-6 mb-3">
+            <label className="form-label mt-2">Dirección</label>
             <select
               className="form-select"
               value={formRuta.direction}
@@ -641,6 +644,21 @@ const Rutas = () => {
               <option value="subida">Subida</option>
               <option value="bajada">Bajada</option>
             </select>
+          </div>
+        </div>
+
+        {/* Hora de salida y duración */}
+        <div className="row g-2 mb-3">
+          <div className="col-md-4">
+            <label className="form-label">Hora de Salida Base</label>
+            <input
+              type="time"
+              className="form-control"
+              value={formRuta.startTime}
+              onChange={(e) =>
+                setFormRuta((prev) => ({ ...prev, startTime: e.target.value }))
+              }
+            />
           </div>
           <div className="col-md-4">
             <label className="form-label">Duración (horas)</label>
