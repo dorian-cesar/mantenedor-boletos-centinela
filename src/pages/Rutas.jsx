@@ -5,6 +5,7 @@ import { Spinner } from 'react-bootstrap';
 import { showToast } from '@components/Toast/Toast';
 import ModalBase from '@components/ModalBase/ModalBase';
 import Swal from 'sweetalert2';
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 
 //const API_URL = "https://bcentinela.dev-wit.com/api";
 const API_URL = "http://localhost:3000/api"; // dev
@@ -29,6 +30,19 @@ const minutesToHhMm = (mins) => {
   const m = mins % 60;
   return `${h}h ${m}m`;
 };
+const formatHoraConDia = (start, offset = 0) => {
+  const total = start + offset;
+  const diaExtra = Math.floor(total / 1440); // 1440 min = 24h
+  const minutos = total % 1440;
+
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  const hhmm = `${pad2(h)}:${pad2(m)}`;
+
+  if (diaExtra === 0) return hhmm;
+  if (diaExtra === 1) return `${hhmm} (día siguiente)`;
+  return `${hhmm} (+${diaExtra} días)`;
+};
 
 const Rutas = () => {
   const [rutas, setRutas] = useState([]);
@@ -44,12 +58,26 @@ const Rutas = () => {
     destination: '',
     startTime: '',
     direction: '',
-    durationMinutes: 0,
+    durationHours: 0,
+    durationMins: 0,
     stops: [
       { name: '', order: 1, offsetMinutes: 0, price: 0 },
       { name: '', order: 2, offsetMinutes: 0, price: 0 },
     ],
   });
+
+  const handleReorderStops = (result) => {
+    if (!result.destination) return; // si se suelta fuera, no hacer nada
+
+    const reordered = Array.from(formRuta.stops);
+    const [moved] = reordered.splice(result.source.index, 1);
+    reordered.splice(result.destination.index, 0, moved);
+
+    // Recalcular orden
+    const reindexed = reordered.map((s, i) => ({ ...s, order: i + 1 }));
+
+    setFormRuta((prev) => ({ ...prev, stops: reindexed }));
+  };
 
   const [rutasExpandida, setRutasExpandida] = useState(null);
   const [filtro, setFiltro] = useState('');
@@ -145,10 +173,6 @@ const Rutas = () => {
       showToast('Datos incompletos', 'Debes seleccionar la dirección (subida/bajada).', true);
       return;
     }
-    if (!formRuta.stops || formRuta.stops.length < 2) {
-      showToast('Datos incompletos', 'Debes agregar al menos 2 paradas (origen y destino).', true);
-      return;
-    }
 
     const stopsLimpias = formRuta.stops
       .map((s, i) => ({
@@ -156,25 +180,47 @@ const Rutas = () => {
         order: i + 1,
         offsetMinutes: Number(s.offsetMinutes) || 0,
         price: Number(s.price) || 0,
-      }
-      ))
+      }))
       .filter((s) => s.name);
 
-    if (stopsLimpias.length < 2) {
-      showToast('Datos incompletos', 'Cada parada debe tener nombre y offset válido.', true);
+    // Necesitamos al menos una parada intermedia,
+    // porque origen y destino los agregamos abajo
+    if (stopsLimpias.length < 0) {
+      showToast('Datos incompletos', 'Debes ingresar al menos una parada intermedia.', true);
       return;
     }
 
-    const durationMinutes =
-      Number(formRuta.durationMinutes) > 0
-        ? Number(formRuta.durationMinutes)
-        : stopsLimpias[stopsLimpias.length - 1].offsetMinutes;
+    // Calcular duración
+    let durationMinutes =
+      Number(formRuta.durationHours) * 60 + Number(formRuta.durationMins);
+
+    // Fallback: usar la última parada como duración si no se ingresó nada
+    if (durationMinutes <= 0 && stopsLimpias.length > 0) {
+      durationMinutes = stopsLimpias[stopsLimpias.length - 1].offsetMinutes;
+    }
 
     const startTime = hhmmToMin(formRuta.startTime);
     if (startTime == null) {
       showToast('Datos inválidos', 'La hora de salida no tiene formato válido.', true);
       return;
     }
+
+    // 🔹 Armar stops finales con origen y destino incluidos
+    const stopsFinal = [
+      {
+        name: formRuta.origin.trim(),
+        order: 0,
+        offsetMinutes: 0,
+        price: Number(formRuta.originPrice) || 0,
+      },
+      ...stopsLimpias.map((s, i) => ({ ...s, order: i + 1 })),
+      {
+        name: formRuta.destination.trim(),
+        order: stopsLimpias.length + 1,
+        offsetMinutes: durationMinutes,
+        price: 0, // destino puedes dejarlo fijo en 0
+      },
+    ];
 
     const payload = {
       name: formRuta.name.trim(),
@@ -183,7 +229,7 @@ const Rutas = () => {
       startTime,
       durationMinutes,
       direction: formRuta.direction,
-      stops: stopsLimpias,
+      stops: stopsFinal,
     };
 
     const esNueva = !rutaEditando;
@@ -390,9 +436,15 @@ const Rutas = () => {
                           </td>
                           <td>{ruta.startTime != null ? minutesToTimeString(ruta.startTime) : '—'}</td>
                           <td>
-                            {ruta.durationMinutes != null
-                              ? minutesToHhMm(ruta.durationMinutes)
-                              : '—'}
+                            {ruta.durationMinutes != null ? (
+                              <>
+                                {minutesToHhMm(ruta.durationMinutes)}
+                                <br />
+                                <small className="text-muted">
+                                  Llegada estimada: {formatHoraConDia(ruta.startTime, ruta.durationMinutes)}
+                                </small>
+                              </>
+                            ) : '—'}
                           </td>
                           <td>{ruta.direction || '—'}</td>
                           <td>
@@ -412,8 +464,12 @@ const Rutas = () => {
                                     destination: ruta.destination || '',
                                     startTime: ruta.startTime != null ? minutesToTimeString(ruta.startTime) : '',
                                     direction: ruta.direction || '',
-                                    durationMinutes: ruta.durationMinutes || 0,
-                                    stops: (ruta.stops || []).map((s, i) => ({
+                                    durationHours: Math.floor((ruta.durationMinutes || 0) / 60),
+                                    durationMins: (ruta.durationMinutes || 0) % 60,
+                                    originPrice: ruta.stops?.[0]?.price || 0,
+                                    stops: (ruta.stops || [])
+                                    .filter((s, i, arr) => i !== 0 && i !== arr.length - 1) // quitar origen y destino
+                                    .map((s, i) => ({
                                       name: s.name || '',
                                       order: i + 1,
                                       offsetMinutes: s.offsetMinutes || 0,
@@ -447,7 +503,7 @@ const Rutas = () => {
                                       <tr>
                                         <th>#</th>
                                         <th>Nombre</th>
-                                        <th>Offset (min)</th>
+                                        <th>Offset</th>
                                         <th>Precio</th>
                                       </tr>
                                     </thead>
@@ -458,7 +514,11 @@ const Rutas = () => {
                                           <tr key={stop._id || i}>
                                             <td>{stop.order}</td>
                                             <td>{stop.name || '—'}</td>
-                                            <td>{stop.offsetMinutes}</td>
+                                            <td>
+                                              {formatHoraConDia(ruta.startTime, stop.offsetMinutes)}
+                                              <br />
+                                              <small className="text-muted">({stop.offsetMinutes} min)</small>
+                                            </td>
                                             <td>{stop.price}</td>
                                           </tr>
                                         ))}
@@ -528,6 +588,19 @@ const Rutas = () => {
           />
         </div>
 
+        <div className="col-md-6">
+          <label className="form-label">Precio Origen</label>
+          <input
+            type="number"
+            min="0"
+            className="form-control"
+            value={formRuta.originPrice || 0}
+            onChange={(e) =>
+              setFormRuta((prev) => ({ ...prev, originPrice: Number(e.target.value) || 0 }))
+            }
+          />
+        </div>
+
         {/* Destino */}
         <div className="mb-3">
           <label className="form-label">Destino</label>
@@ -570,15 +643,32 @@ const Rutas = () => {
             </select>
           </div>
           <div className="col-md-4">
-            <label className="form-label">Duración (minutos)</label>
+            <label className="form-label">Duración (horas)</label>
             <input
               type="number"
+              min="0"
               className="form-control"
-              value={formRuta.durationMinutes || ''}
+              value={formRuta.durationHours}
               onChange={(e) =>
                 setFormRuta((prev) => ({
                   ...prev,
-                  durationMinutes: Number(e.target.value) || 0,
+                  durationHours: Number(e.target.value) || 0,
+                }))
+              }
+            />
+          </div>
+          <div className="col-md-4">
+            <label className="form-label">Duración (minutos)</label>
+            <input
+              type="number"
+              min="0"
+              max="59"
+              className="form-control"
+              value={formRuta.durationMins}
+              onChange={(e) =>
+                setFormRuta((prev) => ({
+                  ...prev,
+                  durationMins: Number(e.target.value) || 0,
                 }))
               }
             />
@@ -587,54 +677,77 @@ const Rutas = () => {
 
         {/* Paradas */}
         <h6>Paradas</h6>
-        {formRuta.stops.map((stop, index) => (
-          <div key={index} className="border p-2 rounded mb-2">
-            <div className="row g-2">
-              <div className="col-md-4">
-                <label className="form-label">Nombre</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={stop.name}
-                  onChange={(e) => handleStopChange(index, 'name', e.target.value)}
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Offset (minutos)</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={stop.offsetMinutes}
-                  onChange={(e) =>
-                    handleStopChange(index, 'offsetMinutes', e.target.value)
-                  }
-                />
-              </div>
-              <div className="col-md-4">
-                <label className="form-label">Precio</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={stop.price}
-                  onChange={(e) =>
-                    handleStopChange(index, 'price', e.target.value)
-                  }
-                />
-              </div>
-            </div>
+        <DragDropContext onDragEnd={handleReorderStops}>
+          <Droppable droppableId="stops">
+            {(provided) => (
+              <div {...provided.droppableProps} ref={provided.innerRef}>
+                {formRuta.stops.map((stop, index) => (
+                  <Draggable key={index} draggableId={`stop-${index}`} index={index}>
+                    {(provided) => (
+                      <div
+                        className="border p-2 rounded mb-2 bg-white"
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        {...provided.dragHandleProps}
+                      >
+                        <div className="row g-2">
+                          <div className="col-md-4">
+                            <label className="form-label">Nombre</label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={stop.name}
+                              onChange={(e) =>
+                                handleStopChange(index, "name", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label">Offset (minutos)</label>
+                            <input
+                              type="number"
+                              className="form-control"
+                              value={stop.offsetMinutes}
+                              onChange={(e) =>
+                                handleStopChange(index, "offsetMinutes", e.target.value)
+                              }
+                            />
+                          </div>
+                          <div className="col-md-4">
+                            <label className="form-label">Precio</label>
+                            <input
+                              type="number"
+                              className="form-control"
+                              value={stop.price}
+                              onChange={(e) =>
+                                handleStopChange(index, "price", e.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
 
-            <div className="mt-2 d-flex justify-content-end">
-              <button
-                type="button"
-                className="btn btn-sm btn-outline-danger"
-                onClick={() => eliminarParada(index)}
-                disabled={formRuta.stops.length <= 1}
-              >
-                <i className="bi bi-trash" /> Eliminar parada
-              </button>
-            </div>
-          </div>
-        ))}
+                        <div className="mt-2 d-flex justify-content-between">
+                          <span className="text-muted">
+                            Arrastra para reordenar ↕
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            onClick={() => eliminarParada(index)}
+                            disabled={formRuta.stops.length <= 1}
+                          >
+                            <i className="bi bi-trash" /> Eliminar parada
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
 
         {/* Botón para agregar paradas */}
         <button className="btn btn-outline-primary w-100" onClick={agregarParada}>
