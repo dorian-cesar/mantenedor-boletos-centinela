@@ -325,7 +325,11 @@ const Rutas = () => {
       setRutaEditando(null);
     } catch (err) {
       console.error(err);
-      showToast("Error", err.message || "No se pudo guardar la ruta", true);
+      const mensaje =
+        err.message === "Failed to fetch"
+          ? "❌ No hay conexión con el servidor. Verifica tu red o que el backend esté activo."
+          : err.message || "Ocurrió un error inesperado";
+      showToast("Error", mensaje, true);
     }
   };
 
@@ -354,7 +358,11 @@ const Rutas = () => {
       await Swal.fire('Ruta eliminada', 'La ruta fue eliminada exitosamente.', 'success');
     } catch (err) {
       console.error(err);
-      await Swal.fire('Error', 'No se pudo eliminar la ruta', 'error');
+      const mensaje =
+        err.message === "Failed to fetch"
+          ? "❌ No hay conexión con el servidor. Verifica tu red o que el backend esté activo."
+          : err.message || "Ocurrió un error inesperado";
+      showToast("Error", mensaje, true);
     }
   };
 
@@ -415,7 +423,11 @@ const Rutas = () => {
                       showToast('Actualizado', 'Lista de rutas sincronizada');
                     } catch (err) {
                       console.error(err);
-                      showToast('Error al actualizar', err.message || 'No se pudo sincronizar', true);
+                      const mensaje =
+                        err.message === "Failed to fetch"
+                          ? "❌ No hay conexión con el servidor. Verifica tu red o que el backend esté activo."
+                          : err.message || "Ocurrió un error inesperado";
+                      showToast("Error", mensaje, true);
                     }
                   }}
                 >
