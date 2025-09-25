@@ -80,10 +80,19 @@ const Rutas = () => {
     durationHours: 0,
     durationMins: 0,
     layout: '',
+    originPrice: 0,
     stops: [
       { name: '', order: 1, offsetMinutes: 0, price: 0 },
       { name: '', order: 2, offsetMinutes: 0, price: 0 },
     ],
+    schedule: {
+      active: true,
+      daysOfWeek: [],   // aquí se seleccionan los días (1=lunes, ..., 7=domingo)
+      startDate: null,
+      endDate: null,
+      horizonDays: 14,
+      exceptions: []
+    }
   });
 
   const handleReorderStops = (result) => {
@@ -148,13 +157,24 @@ const Rutas = () => {
       name: '',
       origin: '',
       destination: '',
-      startTime: '', // string para el input time
+      startTime: '',
       direction: '',
-      durationMinutes: 0,
+      durationHours: 0,
+      durationMins: 0,
+      originPrice: 0,
+      layout: '',
       stops: [
         { name: '', order: 1, offsetMinutes: 0, price: 0 },
         { name: '', order: 2, offsetMinutes: 0, price: 0 },
       ],
+      schedule: {
+        active: true,
+        daysOfWeek: [],
+        startDate: null,
+        endDate: null,
+        horizonDays: 14,
+        exceptions: []
+      }
     });
     setModalRutaVisible(true);
   };
@@ -265,6 +285,7 @@ const Rutas = () => {
       direction: formRuta.direction,
       stops: stopsFinal,
       layout: formRuta.layout || null,
+      schedule: formRuta.schedule 
     };
 
     const esNueva = !rutaEditando;
@@ -440,6 +461,7 @@ const Rutas = () => {
                     <th>Inicio</th>
                     <th>Duración</th>
                     <th>Dirección</th>
+                    <th>Días de Servicio</th>
                     <th>Paradas</th>
                     <th>Acciones</th>
                   </tr>
@@ -518,6 +540,16 @@ const Rutas = () => {
                             )}
                           </td>
                           <td>{ruta.direction || "—"}</td>
+
+                          <td>
+                            {ruta.schedule?.daysOfWeek?.length > 0
+                              ? ruta.schedule.daysOfWeek
+                                  .sort((a,b) => a-b)
+                                  .map(d => ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][d-1])
+                                  .join(", ")
+                              : "—"}
+                          </td>
+
                           <td>
                             <span className="badge bg-info-subtle text-info-emphasis border">
                               {totalParadas}
@@ -533,29 +565,28 @@ const Rutas = () => {
                                     name: ruta.name || "",
                                     origin: ruta.origin || "",
                                     destination: ruta.destination || "",
-                                    startTime:
-                                      ruta.startTime != null
-                                        ? minutesToTimeString(ruta.startTime)
-                                        : "",
+                                    startTime: ruta.startTime != null ? minutesToTimeString(ruta.startTime) : "",
                                     direction: ruta.direction || "",
-                                    durationHours: Math.floor(
-                                      (ruta.durationMinutes || 0) / 60
-                                    ),
-                                    durationMins:
-                                      (ruta.durationMinutes || 0) % 60,
+                                    durationHours: Math.floor((ruta.durationMinutes || 0) / 60),
+                                    durationMins: (ruta.durationMinutes || 0) % 60,
                                     originPrice: ruta.stops?.[0]?.price || 0,
                                     layout: ruta.layout?._id || "",
                                     stops: (ruta.stops || [])
-                                      .filter(
-                                        (s, i, arr) =>
-                                          i !== 0 && i !== arr.length - 1
-                                      ) // quitar origen y destino
+                                      .filter((s, i, arr) => i !== 0 && i !== arr.length - 1)
                                       .map((s, i) => ({
                                         name: s.name || "",
                                         order: i + 1,
                                         offsetMinutes: s.offsetMinutes || 0,
                                         price: s.price || 0,
                                       })),
+                                    schedule: ruta.schedule || {
+                                      active: true,
+                                      daysOfWeek: [],
+                                      startDate: null,
+                                      endDate: null,
+                                      horizonDays: 14,
+                                      exceptions: []
+                                    }
                                   });
                                   setModalRutaVisible(true);
                                 }}
@@ -631,7 +662,6 @@ const Rutas = () => {
         </div>
       </main>
 
-      {/* MODAL NUEVA RUTA - usando el esquema clásico por la validación actual del backend */}
       <ModalBase
         visible={modalRutaVisible}
         title={rutaEditando ? 'Editar Ruta' : 'Nueva Ruta'}
@@ -770,6 +800,38 @@ const Rutas = () => {
                 }))
               }
             />
+          </div>
+        </div>
+
+        {/* Días de la semana */}
+        <div className="mb-3">
+          <label className="form-label">Días disponibles</label>
+          <div className="d-flex flex-wrap gap-3">
+            {["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map((dia, idx) => {
+              const dayValue = idx + 1; // 1 = lunes ... 7 = domingo
+              return (
+                <div key={dayValue} className="form-check">
+                  <input
+                    type="checkbox"
+                    className="form-check-input"
+                    id={`day-${dayValue}`}
+                    checked={formRuta.schedule.daysOfWeek.includes(dayValue)}
+                    onChange={() => {
+                      setFormRuta((prev) => {
+                        const already = prev.schedule.daysOfWeek.includes(dayValue);
+                        const days = already
+                          ? prev.schedule.daysOfWeek.filter(d => d !== dayValue)
+                          : [...prev.schedule.daysOfWeek, dayValue];
+                        return { ...prev, schedule: { ...prev.schedule, daysOfWeek: days } };
+                      });
+                    }}
+                  />
+                  <label className="form-check-label" htmlFor={`day-${dayValue}`}>
+                    {dia}
+                  </label>
+                </div>
+              );
+            })}
           </div>
         </div>
 
