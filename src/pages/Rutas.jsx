@@ -304,11 +304,7 @@ const Rutas = () => {
       setRutaEditando(null);
     } catch (err) {
       console.error(err);
-      const mensaje =
-        err.message === "Failed to fetch"
-          ? "❌ No hay conexión con el servidor. Verifica tu red o contacta a soporte."
-          : err.message || "Ocurrió un error inesperado";
-      showToast("Error", mensaje, true);
+      showToast("Error", err.message || "No se pudo guardar la ruta", true);
     }
   };
 
@@ -337,11 +333,7 @@ const Rutas = () => {
       await Swal.fire('Ruta eliminada', 'La ruta fue eliminada exitosamente.', 'success');
     } catch (err) {
       console.error(err);
-      const mensaje =
-        err.message === "Failed to fetch"
-          ? "❌ No hay conexión con el servidor. Verifica tu red o contacta a soporte."
-          : err.message || "Ocurrió un error inesperado";
-      showToast("Error", mensaje, true);
+      await Swal.fire('Error', 'No se pudo eliminar la ruta', 'error');
     }
   };
 
@@ -402,11 +394,7 @@ const Rutas = () => {
                       showToast('Actualizado', 'Lista de rutas sincronizada');
                     } catch (err) {
                       console.error(err);
-                      const mensaje =
-                        err.message === "Failed to fetch"
-                          ? "❌ No hay conexión con el servidor. Verifica tu red o contacta a soporte."
-                          : err.message || "Ocurrió un error inesperado";
-                      showToast("Error", mensaje, true);
+                      showToast('Error al actualizar', err.message || 'No se pudo sincronizar', true);
                     }
                   }}
                 >
@@ -444,18 +432,18 @@ const Rutas = () => {
             <div className="table-responsive">
               <table className="table table-striped table-hover align-middle">
                 <thead className="table-light">
-                <tr>
-                  <th>Ruta</th>
-                  <th>Origen → Destino</th>
-                  <th>Layout</th>
-                  <th>Salida</th>
-                  <th>Duración</th>
-                  <th>Llegada</th>
-                  <th>Dirección</th>
-                  <th>Paradas</th>
-                  <th>Acciones</th>
-                </tr>
-              </thead>
+                  <tr>
+                    <th></th>
+                    <th>Nombre</th>
+                    <th>Origen → Destino</th>
+                    <th>Layout</th>
+                    <th>Inicio</th>
+                    <th>Duración</th>
+                    <th>Dirección</th>
+                    <th>Paradas</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {rutasFiltradas.length === 0 && (
                     <tr>
@@ -595,20 +583,33 @@ const Rutas = () => {
                                     <thead>
                                       <tr>
                                         <th>#</th>
-                                        <th>Parada</th>
-                                        <th>Hora</th>
+                                        <th>Nombre</th>
+                                        <th>Hora Estimada</th>
                                         <th>Precio</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {servicio.departures.map((d) => (
-                                        <tr key={d.order}>
-                                          <td>{d.order}</td>
-                                          <td>{d.stop}</td>
-                                          <td>{new Date(d.time).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</td>
-                                          <td>{formatCLP(d.price)}</td>
-                                        </tr>
-                                      ))}
+                                      {[...(ruta.stops || [])]
+                                        .sort(
+                                          (a, b) => (a.order || 0) - (b.order || 0)
+                                        )
+                                        .map((stop, i) => (
+                                          <tr key={stop._id || i}>
+                                            <td>{stop.order}</td>
+                                            <td>{stop.name || "—"}</td>
+                                            <td>
+                                              {formatHoraConDia(
+                                                ruta.startTime,
+                                                stop.offsetMinutes
+                                              )}
+                                              <br />
+                                              <small className="text-muted">
+                                                ({stop.offsetMinutes} min)
+                                              </small>
+                                            </td>
+                                            <td>{formatCLP(stop.price)}</td>
+                                          </tr>
+                                        ))}
                                     </tbody>
                                   </table>
                                 ) : (
