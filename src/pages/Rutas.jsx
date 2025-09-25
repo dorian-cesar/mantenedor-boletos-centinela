@@ -615,32 +615,32 @@ const Rutas = () => {
                                 onClick={() => {
                                   setRutaEditando(ruta._id);
                                   setFormRuta({
-                                    name: ruta.name || "",
-                                    origin: ruta.origin || "",
-                                    destination: ruta.destination || "",
-                                    startTime: ruta.startTime != null ? minutesToTimeString(ruta.startTime) : "",
-                                    direction: ruta.direction || "",
-                                    durationHours: Math.floor((ruta.durationMinutes || 0) / 60),
-                                    durationMins: (ruta.durationMinutes || 0) % 60,
-                                    originPrice: ruta.stops?.[0]?.price || 0,
-                                    layout: ruta.layout?._id || "",
-                                    stops: (ruta.stops || [])
-                                      .filter((s, i, arr) => i !== 0 && i !== arr.length - 1)
-                                      .map((s, i) => ({
-                                        name: s.name || "",
-                                        order: i + 1,
-                                        offsetMinutes: s.offsetMinutes || 0,
-                                        price: s.price || 0,
-                                      })),
-                                    schedule: ruta.schedule || {
-                                      active: true,
-                                      daysOfWeek: [],
-                                      startDate: null,
-                                      endDate: null,
-                                      horizonDays: 14,
-                                      exceptions: []
-                                    }
-                                  });
+                                  name: ruta.name || "",
+                                  origin: ruta.origin || "",
+                                  destination: ruta.destination || "",
+                                  startTime: ruta.startTime != null ? minutesToTimeString(ruta.startTime) : "",
+                                  direction: ruta.direction || "",
+                                  durationHours: Math.floor((ruta.durationMinutes || 0) / 60),
+                                  durationMins: (ruta.durationMinutes || 0) % 60,
+                                  originPrice: ruta.stops?.[0]?.price || 0,
+                                  layout: (typeof ruta.layout === 'object' ? ruta.layout?._id : ruta.layout) || "",   // ✅ siempre string
+                                  stops: (ruta.stops || [])
+                                    .filter((s, i, arr) => i !== 0 && i !== arr.length - 1)
+                                    .map((s, i) => ({
+                                      name: s.name || "",
+                                      order: i + 1,
+                                      offsetMinutes: s.offsetMinutes || 0,
+                                      price: s.price || 0,
+                                    })),
+                                  schedule: ruta.schedule || {
+                                    active: true,
+                                    daysOfWeek: [],
+                                    startDate: null,
+                                    endDate: null,
+                                    horizonDays: 14,
+                                    exceptions: []
+                                  }
+                                });
                                   setModalRutaVisible(true);
                                 }}
                               >
