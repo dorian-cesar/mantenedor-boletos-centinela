@@ -5,6 +5,17 @@ import ModalBase from '@components/ModalBase/ModalBase';
 import { showToast } from '@components/Toast/Toast';
 import { Tabs, Tab } from 'react-bootstrap';
 
+const API_URL = import.meta.env.VITE_API_URL;
+if (!API_URL) {
+  throw new Error("No se encontró VITE_API_URL. Revisa tus .env");
+}
+
+// Endpoints usados en este componente
+const SERVICES_ENDPOINT  = `${API_URL}/services`;
+const LAYOUTS_ENDPOINT   = `${API_URL}/bus-layout`;
+const CITIES_ENDPOINT    = `${API_URL}/cities`;
+const ROUTES_ENDPOINT    = `${API_URL}/routes`;
+
 const Servicios = () => {
   const formatearFecha = (fechaStr) => {
     const [a, m, d] = fechaStr.split("-");
@@ -231,7 +242,11 @@ const Servicios = () => {
   useEffect(() => {
     const fetchLayouts = async () => {
       try {
-        const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
+        const res = await fetch(`${LAYOUTS_ENDPOINT}/`, {
+          headers: {
+            "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+          },
+        });
         const data = await res.json();
         setLayouts(data);
       } catch (error) {
@@ -244,7 +259,7 @@ const Servicios = () => {
   useEffect(() => {
     const obtenerCiudades = async () => {
       try {
-        const res = await fetch('https://bcentinela.dev-wit.com/api/cities');
+        const res = await fetch(`${CITIES_ENDPOINT}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` } });
         const data = await res.json();
         setCiudades(data);
       } catch (error) {
@@ -290,7 +305,7 @@ const Servicios = () => {
   useEffect(() => {
     const cargarOrigenes = async () => {
       try {
-        const res = await fetch('https://bcentinela.dev-wit.com/api/routes/origins');
+        const res = await fetch(`${ROUTES_ENDPOINT}/origins`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` } });
         const data = await res.json();
         setOrigenesDestinos(data);
       } catch (error) {
@@ -327,8 +342,10 @@ const Servicios = () => {
         sessionStorage.getItem("token") ||
         JSON.parse(localStorage.getItem("recordarSession") || "{}").token;
 
-      const res = await fetch("https://bcentinela.dev-wit.com/api/services/all", {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await fetch(`${SERVICES_ENDPOINT}/`, {
+        headers: {
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
       });
 
       if (!res.ok) throw new Error("No se pudieron obtener los servicios.");
@@ -453,19 +470,16 @@ const Servicios = () => {
         priceSecond: nuevoServicio.priceSecond ? Number(nuevoServicio.priceSecond) : null
       };
 
-      const endpoint = editandoServicioId
-        ? `https://bcentinela.dev-wit.com/api/templates/update/${editandoServicioId}`
-        : `https://bcentinela.dev-wit.com/api/templates/create`;
-
-      const metodo = editandoServicioId ? 'PUT' : 'POST';
+      const endpoint = `${SERVICES_ENDPOINT}/generate`;
+      const metodo = 'POST';
 
       const res = await fetch(endpoint, {
-        method: metodo,
+        method: metodo, // 'POST'
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error('Error al guardar servicio');
@@ -491,16 +505,25 @@ const Servicios = () => {
         JSON.parse(localStorage.getItem("recordarSession") || '{}').token;
 
       const payload = {
-        ...nuevoServicio,
+        startDate: nuevoServicio.startDate,   // YYYY-MM-DD
+        daysOfWeek: nuevoServicio.days,       // [1..7]
+        origin: nuevoServicio.origin,
+        destination: nuevoServicio.destination,
+        terminalOrigin: nuevoServicio.terminalOrigin,
+        terminalDestination: nuevoServicio.terminalDestination,
+        time: nuevoServicio.time,             // HH:mm (salida)
+        arrivalDate: nuevoServicio.arrivalDate,
+        arrivalTime: nuevoServicio.arrivalTime,
+        company: nuevoServicio.company,
+        busLayout: nuevoServicio.busLayout,   // si backend espera name o id, ajusta aquí
+        busTypeDescription: nuevoServicio.busTypeDescription,
+        seatDescriptionFirst: nuevoServicio.seatDescriptionFirst,
+        seatDescriptionSecond: nuevoServicio.seatDescriptionSecond,
         priceFirst: nuevoServicio.priceFirst ? Number(nuevoServicio.priceFirst) : null,
         priceSecond: nuevoServicio.priceSecond ? Number(nuevoServicio.priceSecond) : null,
-        date: nuevoServicio.startDate,
-        departureTime: nuevoServicio.time,
-        arrivalDate: nuevoServicio.arrivalDate,
-        arrivalTime: nuevoServicio.arrivalTime
       };
 
-      const res = await fetch(`https://bcentinela.dev-wit.com/api/templates/${servicioSeleccionado._id}`, {
+      const res = await fetch(`${TEMPLATES_ENDPOINT}/${servicioSeleccionado._id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

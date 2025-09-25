@@ -22,8 +22,10 @@ const Usuarios = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'admin',
+    rut: '',
+    role: 'centinela',
     password: '',
+    activo: true,
   });
 
   const handleInputChange = (e) => {
@@ -42,7 +44,7 @@ const Usuarios = () => {
     try {
       const url = modoEdicion
         ? `${USERS_ENDPOINT}/${usuarioEditandoId}`
-        : `${USERS_ENDPOINT}/register`;
+        : USERS_ENDPOINT;
 
       const method = modoEdicion ? 'PUT' : 'POST';
       const bodyData = { ...formData };
@@ -152,7 +154,9 @@ const Usuarios = () => {
     setFormData({
       name: usuario.name,
       email: usuario.email,
+      rut: usuario.rut,
       role: usuario.role,
+      activo: usuario.activo,
       password: '',
     });
     setModalVisible(true);
@@ -342,28 +346,123 @@ const Usuarios = () => {
         }
       >
         <form className="space-y-4">
+          {/* 🔹 Datos personales */}
+          <h6 className="mb-2 mt-2 text-muted">Datos personales</h6>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="form-label">Nombre</label>
-              <input type="text" name="name" className="form-control" placeholder="Nombre completo" value={formData.name} onChange={handleInputChange} />
+              <label htmlFor="name" className="form-label">Nombre</label>
+              <input
+                id="name"
+                type="text"
+                name="name"
+                className="form-control"
+                placeholder="Nombre completo"
+                value={formData.name}
+                onChange={handleInputChange}
+                required
+              />
             </div>
             <div>
-              <label className="form-label">Email</label>
-              <input type="email" name="email" className="form-control" placeholder="correo@ejemplo.com" value={formData.email} onChange={handleInputChange} />
+              <label htmlFor="email" className="form-label">Email</label>
+              <input
+                id="email"
+                type="email"
+                name="email"
+                className="form-control"
+                placeholder="correo@ejemplo.com"
+                value={formData.email}
+                onChange={handleInputChange}
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="rut" className="form-label">RUT</label>
+              <input
+                id="rut"
+                type="text"
+                name="rut"
+                className="form-control"
+                placeholder="Ej: 12345678-9"
+                value={formData.rut}
+                onChange={handleInputChange}
+                required
+              />
+              <small className="text-muted">Formato: 12345678-9</small>
             </div>
           </div>
-          <div className="mt-4">
-            <label className="form-label">Rol</label>
-            <select name="role" className="form-select" value={formData.role} onChange={handleInputChange}>
-              <option value="admin">Admin</option>
-              <option value="chofer">Chofer</option>
-              <option value="caja">Caja</option>
-            </select>
+
+          {/* 🔹 Datos de cuenta */}
+          <h6 className="mb-2 mt-4 text-muted">Datos de cuenta</h6>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="role" className="form-label">Rol</label>
+              <select
+                id="role"
+                name="role"
+                className="form-select"
+                value={formData.role}
+                onChange={handleInputChange}
+              >
+                <option value="superAdmin">Administrador General</option>
+                <option value="centinela">Centinela</option>
+                <option value="contratista">Contratista</option>
+              </select>
+            </div>
+            <div className="form-check form-switch d-flex align-items-center mt-4">
+              <input
+                type="checkbox"
+                className="form-check-input me-2"
+                id="activoCheck"
+                name="activo"
+                checked={formData.activo ?? true}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, activo: e.target.checked }))
+                }
+              />
+              <label className="form-check-label" htmlFor="activoCheck">
+                {formData.activo ? "Activo" : "Inactivo"}
+              </label>
+            </div>
           </div>
+
+          {/* 🔹 Contraseña (solo en creación) */}
           {!modoEdicion && (
             <div className="mt-4">
-              <label className="form-label">Contraseña</label>
-              <input type="password" name="password" className="form-control" placeholder="Mínimo 8 caracteres" value={formData.password} onChange={handleInputChange} />
+              <label htmlFor="password" className="form-label">Contraseña</label>
+              <div className="input-group">
+                <input
+                  id="password"
+                  type="password"
+                  name="password"
+                  className={`form-control ${
+                    formData.password && formData.password.length < 8
+                      ? "is-invalid"
+                      : ""
+                  }`}
+                  placeholder="Mínimo 8 caracteres"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                />
+                <button
+                  type="button"
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    const input = document.getElementById("password");
+                    input.type = input.type === "password" ? "text" : "password";
+                  }}
+                >
+                  <i className="bi bi-eye"></i>
+                </button>
+                {formData.password && formData.password.length < 8 && (
+                  <div className="invalid-feedback">
+                    La contraseña debe tener al menos 8 caracteres.
+                  </div>
+                )}
+              </div>
+              <small className="text-muted">
+                Usa una contraseña segura con letras y números.
+              </small>
             </div>
           )}
         </form>
