@@ -13,6 +13,7 @@ if (!API_URL) {
 }
 
 const ROUTES_ENDPOINT = `${API_URL}/route-masters`;
+const LAYOUTS_ENDPOINT = `${API_URL}/bus-layout`;
 
 /** Utils */
 const pad2 = (n) => String(n).padStart(2, '0');
@@ -60,6 +61,11 @@ const formatHoraConDia = (start, offset = 0) => {
 const Rutas = () => {
   const [rutas, setRutas] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [layouts, setLayouts] = useState([]);
+  const [modalLayoutVisible, setModalLayoutVisible] = useState(false);
+  const [layoutSeleccionado, setLayoutSeleccionado] = useState(null);
+
+
 
   // Modal crear/editar
   const [modalRutaVisible, setModalRutaVisible] = useState(false);
@@ -73,6 +79,7 @@ const Rutas = () => {
     direction: '',
     durationHours: 0,
     durationMins: 0,
+    layout: '',
     stops: [
       { name: '', order: 1, offsetMinutes: 0, price: 0 },
       { name: '', order: 2, offsetMinutes: 0, price: 0 },
@@ -113,7 +120,21 @@ const Rutas = () => {
         setCargando(false);
       }
     };
+    const fetchLayouts = async () => {
+      try {
+        const res = await fetch(LAYOUTS_ENDPOINT, {
+          headers: {
+            "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+          },
+        });
+        const data = await res.json();
+        setLayouts(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error("Error al cargar layouts:", err);
+      }
+    };
     fetchRutas();
+    fetchLayouts();
   }, []);
 
   const toggleExpandirRuta = (rutaId) => {
@@ -243,6 +264,7 @@ const Rutas = () => {
       durationMinutes,
       direction: formRuta.direction,
       stops: stopsFinal,
+      layout: formRuta.layout || null,
     };
 
     const esNueva = !rutaEditando;
@@ -412,7 +434,9 @@ const Rutas = () => {
                 <thead className="table-light">
                   <tr>
                     <th></th>
-                    <th>Nombre / Origen → Destino</th>
+                    <th>Nombre</th>
+                    <th>Origen → Destino</th>
+                    <th>Layout</th>
                     <th>Inicio</th>
                     <th>Duración</th>
                     <th>Dirección</th>
@@ -423,7 +447,7 @@ const Rutas = () => {
                 <tbody>
                   {rutasFiltradas.length === 0 && (
                     <tr>
-                      <td colSpan={7}>Sin resultados</td>
+                      <td colSpan={9}>Sin resultados</td>
                     </tr>
                   )}
 
@@ -431,7 +455,7 @@ const Rutas = () => {
                     const totalParadas = ruta?.stops?.length || 0;
                     return (
                       <React.Fragment key={ruta._id}>
-                        <tr className={isExpanded(ruta._id) ? 'table-active' : ''}>
+                        <tr className={isExpanded(ruta._id) ? "table-active" : ""}>
                           <td>
                             <button
                               className="btn btn-sm btn-outline-secondary"
@@ -439,30 +463,64 @@ const Rutas = () => {
                             >
                               <i
                                 className={`bi ${
-                                  isExpanded(ruta._id) ? 'bi-chevron-down' : 'bi-chevron-right'
+                                  isExpanded(ruta._id)
+                                    ? "bi-chevron-down"
+                                    : "bi-chevron-right"
                                 }`}
                               />
                             </button>
                           </td>
-                          <td className="fw-semibold">
-                            {ruta.name ? ruta.name : `${ruta.origin || '—'} → ${ruta.destination || '—'}`}
+                          <td className="fw-semibold">{ruta.name || "—"}</td>
+                          <td>{`${ruta.origin || "—"} → ${ruta.destination || "—"}`}</td>
+                          <td>
+                            {ruta.layout ? (
+                              <>
+                                {ruta.layout.name}
+                                <br />
+                                <small className="text-muted">
+                                  {ruta.layout.capacidad} asientos
+                                </small>
+                                <br />
+                                <button
+                                  className="btn btn-sm btn-outline-secondary mt-1"
+                                  onClick={() => {
+                                    setLayoutSeleccionado(ruta.layout);
+                                    setModalLayoutVisible(true);
+                                  }}
+                                >
+                                  <i className="bi bi-eye" /> Ver
+                                </button>
+                              </>
+                            ) : (
+                              "—"
+                            )}
                           </td>
-                          <td>{ruta.startTime != null ? minutesToTimeString(ruta.startTime) : '—'}</td>
+                          <td>
+                            {ruta.startTime != null
+                              ? minutesToTimeString(ruta.startTime)
+                              : "—"}
+                          </td>
                           <td>
                             {ruta.durationMinutes != null ? (
                               <>
                                 {minutesToHhMm(ruta.durationMinutes)}
                                 <br />
                                 <small className="text-muted">
-                                  Llegada estimada: {formatHoraConDia(ruta.startTime, ruta.durationMinutes)}
+                                  Llegada:{" "}
+                                  {formatHoraConDia(
+                                    ruta.startTime,
+                                    ruta.durationMinutes
+                                  )}
                                 </small>
                               </>
-                            ) : '—'}
+                            ) : (
+                              "—"
+                            )}
                           </td>
-                          <td>{ruta.direction || '—'}</td>
+                          <td>{ruta.direction || "—"}</td>
                           <td>
                             <span className="badge bg-info-subtle text-info-emphasis border">
-                              {ruta.stops?.length || 0}
+                              {totalParadas}
                             </span>
                           </td>
                           <td>
@@ -472,22 +530,32 @@ const Rutas = () => {
                                 onClick={() => {
                                   setRutaEditando(ruta._id);
                                   setFormRuta({
-                                    name: ruta.name || '',
-                                    origin: ruta.origin || '',
-                                    destination: ruta.destination || '',
-                                    startTime: ruta.startTime != null ? minutesToTimeString(ruta.startTime) : '',
-                                    direction: ruta.direction || '',
-                                    durationHours: Math.floor((ruta.durationMinutes || 0) / 60),
-                                    durationMins: (ruta.durationMinutes || 0) % 60,
+                                    name: ruta.name || "",
+                                    origin: ruta.origin || "",
+                                    destination: ruta.destination || "",
+                                    startTime:
+                                      ruta.startTime != null
+                                        ? minutesToTimeString(ruta.startTime)
+                                        : "",
+                                    direction: ruta.direction || "",
+                                    durationHours: Math.floor(
+                                      (ruta.durationMinutes || 0) / 60
+                                    ),
+                                    durationMins:
+                                      (ruta.durationMinutes || 0) % 60,
                                     originPrice: ruta.stops?.[0]?.price || 0,
+                                    layout: ruta.layout?._id || "",
                                     stops: (ruta.stops || [])
-                                    .filter((s, i, arr) => i !== 0 && i !== arr.length - 1) // quitar origen y destino
-                                    .map((s, i) => ({
-                                      name: s.name || '',
-                                      order: i + 1,
-                                      offsetMinutes: s.offsetMinutes || 0,
-                                      price: s.price || 0,
-                                    })),
+                                      .filter(
+                                        (s, i, arr) =>
+                                          i !== 0 && i !== arr.length - 1
+                                      ) // quitar origen y destino
+                                      .map((s, i) => ({
+                                        name: s.name || "",
+                                        order: i + 1,
+                                        offsetMinutes: s.offsetMinutes || 0,
+                                        price: s.price || 0,
+                                      })),
                                   });
                                   setModalRutaVisible(true);
                                 }}
@@ -507,7 +575,7 @@ const Rutas = () => {
 
                         {isExpanded(ruta._id) && (
                           <tr>
-                            <td colSpan={7}>
+                            <td colSpan={9}>
                               <div className="p-2 border rounded bg-light">
                                 <h6>Paradas</h6>
                                 {ruta.stops?.length > 0 ? (
@@ -522,15 +590,22 @@ const Rutas = () => {
                                     </thead>
                                     <tbody>
                                       {[...(ruta.stops || [])]
-                                        .sort((a, b) => (a.order || 0) - (b.order || 0))
+                                        .sort(
+                                          (a, b) => (a.order || 0) - (b.order || 0)
+                                        )
                                         .map((stop, i) => (
                                           <tr key={stop._id || i}>
                                             <td>{stop.order}</td>
-                                            <td>{stop.name || '—'}</td>
+                                            <td>{stop.name || "—"}</td>
                                             <td>
-                                              {formatHoraConDia(ruta.startTime, stop.offsetMinutes)}
+                                              {formatHoraConDia(
+                                                ruta.startTime,
+                                                stop.offsetMinutes
+                                              )}
                                               <br />
-                                              <small className="text-muted">({stop.offsetMinutes} min)</small>
+                                              <small className="text-muted">
+                                                ({stop.offsetMinutes} min)
+                                              </small>
                                             </td>
                                             <td>{formatCLP(stop.price)}</td>
                                           </tr>
@@ -538,7 +613,9 @@ const Rutas = () => {
                                     </tbody>
                                   </table>
                                 ) : (
-                                  <p className="text-muted mb-0">No hay paradas registradas.</p>
+                                  <p className="text-muted mb-0">
+                                    No hay paradas registradas.
+                                  </p>
                                 )}
                               </div>
                             </td>
@@ -696,6 +773,25 @@ const Rutas = () => {
           </div>
         </div>
 
+        {/* Layout de bus */}
+        <div className="mb-3">
+          <label className="form-label">Layout de Bus</label>
+          <select
+            className="form-select"
+            value={formRuta.layout}
+            onChange={(e) =>
+              setFormRuta((prev) => ({ ...prev, layout: e.target.value }))
+            }
+          >
+            <option value="">Seleccione un layout...</option>
+            {layouts.map((layout) => (
+              <option key={layout._id} value={layout._id}>
+                {layout.name} ({layout.capacidad} asientos)
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Paradas */}
         <h6>Paradas</h6>
         <DragDropContext onDragEnd={handleReorderStops}>
@@ -775,6 +871,104 @@ const Rutas = () => {
           + Agregar Parada
         </button>
       </ModalBase>
+
+      <ModalBase
+        visible={modalLayoutVisible}
+        title={layoutSeleccionado?.name || "Layout de bus"}
+        onClose={() => {
+          setModalLayoutVisible(false);
+          setLayoutSeleccionado(null);
+        }}
+        footer={
+          <button
+            className="btn btn-secondary"
+            onClick={() => {
+              setModalLayoutVisible(false);
+              setLayoutSeleccionado(null);
+            }}
+          >
+            Cerrar
+          </button>
+        }
+      >
+        {layoutSeleccionado ? (
+          <div>
+            <p>
+              <strong>Capacidad:</strong> {layoutSeleccionado.capacidad} asientos
+            </p>
+            <p>
+              <strong>Pisos:</strong> {layoutSeleccionado.pisos}
+            </p>
+
+            <div className="row">
+              {/* Piso 1 */}
+              {layoutSeleccionado.floor1 && (
+                <div className={layoutSeleccionado.floor2 ? "col-md-6" : "col-12"}>
+                  <h6 className="text-center">Piso 1</h6>
+                  {layoutSeleccionado.tipo_Asiento_piso_1 && (
+                    <p className="text-center text-muted small mb-2">
+                      Tipo de asiento: {layoutSeleccionado.tipo_Asiento_piso_1}
+                    </p>
+                  )}
+                  <div className="d-inline-block border rounded p-2 bg-light">
+                    {layoutSeleccionado.floor1.seatMap.map((row, i) => (
+                      <div key={i} className="d-flex justify-content-center">
+                        {row.map((seat, j) => (
+                          <div
+                            key={j}
+                            className="border m-1 p-2 text-center"
+                            style={{
+                              width: 40,
+                              height: 40,
+                              background: seat ? "#f8f9fa" : "transparent",
+                            }}
+                          >
+                            {seat || ""}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Piso 2 */}
+              {layoutSeleccionado.floor2 && (
+                <div className={layoutSeleccionado.floor1 ? "col-md-6" : "col-12"}>
+                  <h6 className="text-center">Piso 2</h6>
+                  {layoutSeleccionado.tipo_Asiento_piso_2 && (
+                    <p className="text-center text-muted small mb-2">
+                      Tipo de asiento: {layoutSeleccionado.tipo_Asiento_piso_2}
+                    </p>
+                  )}
+                  <div className="d-inline-block border rounded p-2 bg-light">
+                    {layoutSeleccionado.floor2.seatMap.map((row, i) => (
+                      <div key={i} className="d-flex justify-content-center">
+                        {row.map((seat, j) => (
+                          <div
+                            key={j}
+                            className="border m-1 p-2 text-center"
+                            style={{
+                              width: 40,
+                              height: 40,
+                              background: seat ? "#f8f9fa" : "transparent",
+                            }}
+                          >
+                            {seat || ""}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <p>No hay datos del layout</p>
+        )}
+      </ModalBase>
+
     </div>
   );
 };
