@@ -13,7 +13,6 @@ if (!API_URL) {
 // Endpoints usados en este componente
 const SERVICES_ENDPOINT  = `${API_URL}/services`;
 const LAYOUTS_ENDPOINT   = `${API_URL}/bus-layout`;
-const ROUTES_ENDPOINT    = `${API_URL}/route-masters`;
 
 const formatHoraCL = (iso) =>
   new Date(iso).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
@@ -30,33 +29,10 @@ const minutesToHhMm = (min = 0) => {
 const Servicios = () => {
   const [todosLosServicios, setTodosLosServicios] = useState([]);  
   const [serviciosFiltrados, setServiciosFiltrados] = useState([]);
-  const [modalNuevoVisible, setModalNuevoVisible] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
-  const [servicioSeleccionado, setServicioSeleccionado] = useState(null);
   const [busqueda, setBusqueda] = useState(''); 
-  const [nuevoServicio, setNuevoServicio] = useState({
-    origin: '',
-    destination: '',
-    startDate: '',
-    days: [],
-    time: '',
-    busLayout: '',
-    company: '',
-    busTypeDescription: '',
-    seatDescriptionFirst: '',
-    seatDescriptionSecond: '',
-    priceFirst: '',
-    priceSecond: '',
-    terminalOrigin: '',
-    terminalDestination: '',
-    arrivalDate: '',
-    arrivalTime: ''
-  });  
   const [filtroOrigen, setFiltroOrigen] = useState('');
   const [filtroDestino, setFiltroDestino] = useState('');
   const [cargando, setCargando] = useState(false);
-
-
   const origenes = useMemo(() => {
     const set = new Set(todosLosServicios.map(s => s.routeMaster?.origin).filter(Boolean));
     return Array.from(set).sort();
@@ -67,8 +43,6 @@ const Servicios = () => {
     return Array.from(set).sort();
   }, [todosLosServicios]);
   const [layouts, setLayouts] = useState([]);
-  const layoutSeleccionado = layouts.find(l => l.name === nuevoServicio.busLayout);
-  const tieneDosPisos = layoutSeleccionado?.pisos === 2;
   const [orden, setOrden] = useState('hora');
   const [ordenAscendente, setOrdenAscendente] = useState(true);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
@@ -331,117 +305,13 @@ const Servicios = () => {
       setFechaSeleccionada("todos");
       setServiciosFiltrados(data);
 
-      return true; // ✅ éxito
+      return true;
     } finally {
       setCargando(false);
     }
   };
 
   const handleBuscar = (e) => setBusqueda(e.target.value); 
-
-  const handleNuevoChange = (e) => {
-    const { name, value } = e.target;
-    setNuevoServicio(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleDaysChange = (day) => {
-    setNuevoServicio(prev => {
-      const days = prev.days.includes(day)
-        ? prev.days.filter(d => d !== day)
-        : [...prev.days, day];
-      return { ...prev, days };
-    });
-  };  
-
-  const crearNuevoServicio = async () => {
-    if (!validarCampos()) return;
-    try {
-      const token =
-        sessionStorage.getItem("token") ||
-        JSON.parse(localStorage.getItem("recordarSession") || '{}').token;
-
-      const payload = {
-        ...nuevoServicio,
-        priceFirst: nuevoServicio.priceFirst ? Number(nuevoServicio.priceFirst) : null,
-        priceSecond: nuevoServicio.priceSecond ? Number(nuevoServicio.priceSecond) : null
-      };
-
-      const endpoint = `${SERVICES_ENDPOINT}/generate`;
-      const metodo = 'POST';
-
-      const res = await fetch(endpoint, {
-        method: metodo, // 'POST'
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) throw new Error('Error al guardar servicio');
-
-      showToast('Éxito', editandoServicioId ? 'Servicio actualizado' : 'Servicio creado');
-      setModalNuevoVisible(false);
-      setEditandoServicioId(null);  
-
-      await fetchServicios();  
-        
-    } catch (error) {
-      console.error(error);
-      showToast('Error', 'No se pudo guardar el servicio.', true);
-    }
-  };  
-
-  const actualizarServicio = async () => {
-    if (!validarCampos()) return;
-
-    try {
-      const token =
-        sessionStorage.getItem("token") ||
-        JSON.parse(localStorage.getItem("recordarSession") || '{}').token;
-
-      const payload = {
-        startDate: nuevoServicio.startDate,   // YYYY-MM-DD
-        daysOfWeek: nuevoServicio.days,       // [1..7]
-        origin: nuevoServicio.origin,
-        destination: nuevoServicio.destination,
-        terminalOrigin: nuevoServicio.terminalOrigin,
-        terminalDestination: nuevoServicio.terminalDestination,
-        time: nuevoServicio.time,             // HH:mm (salida)
-        arrivalDate: nuevoServicio.arrivalDate,
-        arrivalTime: nuevoServicio.arrivalTime,
-        company: nuevoServicio.company,
-        busLayout: nuevoServicio.busLayout,   // si backend espera name o id, ajusta aquí
-        busTypeDescription: nuevoServicio.busTypeDescription,
-        seatDescriptionFirst: nuevoServicio.seatDescriptionFirst,
-        seatDescriptionSecond: nuevoServicio.seatDescriptionSecond,
-        priceFirst: nuevoServicio.priceFirst ? Number(nuevoServicio.priceFirst) : null,
-        priceSecond: nuevoServicio.priceSecond ? Number(nuevoServicio.priceSecond) : null,
-      };
-
-      const res = await fetch(`${TEMPLATES_ENDPOINT}/${servicioSeleccionado._id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) throw new Error('Error al actualizar servicio');
-
-      showToast('Éxito', 'Servicio actualizado correctamente.');
-      setModalNuevoVisible(false);
-      setModoEdicion(false);
-      setNuevoServicio(valoresIniciales); // Reset form       
-    } catch (error) {
-      console.error(error);
-      showToast('Error', 'No se pudo actualizar el servicio.', true);
-    }
-  };  
 
   return (
     <>
@@ -495,13 +365,6 @@ const Servicios = () => {
                       <i className="bi bi-arrow-repeat me-1"></i> Actualizar
                     </>
                   )}
-                </button>
-
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setModalNuevoVisible(true)}
-                >
-                  <i className="bi bi-calendar-plus me-2"></i> Nuevo Servicio
                 </button>
               </div>
             </div>
@@ -604,18 +467,7 @@ const Servicios = () => {
                               <td>{salida ? formatFechaCL(salida.time) : '—'}</td>
                               <td>{llegada ? formatFechaCL(llegada.time) : '—'}</td>
                               <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
-                              <td>
-                                <button
-                                  className="btn btn-sm btn-info"
-                                  onClick={() => {
-                                    setServicioSeleccionado(servicio);
-                                    setModalVisible(true);
-                                  }}
-                                  title="Ver asientos"
-                                >
-                                  <i className="bi bi-eye"></i>
-                                </button>{' '}
-                                
+                              <td> 
                                 <button
                                   className="btn btn-sm btn-danger"
                                   onClick={() => handleEliminar(servicio._id)}
@@ -665,14 +517,14 @@ const Servicios = () => {
                           <table className="table table-bordered table-hover align-middle">
                             <thead className="table-light">
                               <tr>
-                                {/* <th>ID Servicio</th> */}
                                 <th>Origen → Destino</th>
-                                <th>Terminales</th>
+                                <th>Ruta</th>
+                                <th>Layout</th>
                                 <th>Hora Salida</th>
                                 <th>Hora Llegada</th>
-                                <th>Fecha salida</th>
-                                <th>Fecha llegada</th>
-                                <th>Tipo de Bus</th>
+                                <th>Fecha Salida</th>
+                                <th>Fecha Llegada</th>
+                                <th>Duración</th>
                                 <th>Acciones</th>
                               </tr>
                             </thead>
@@ -688,17 +540,14 @@ const Servicios = () => {
                                     <td>{servicio.layout?.name || '—'}</td>
                                     <td>{salida ? formatHoraCL(salida.time) : '—'}</td>
                                     <td>{llegada ? formatHoraCL(llegada.time) : '—'}</td>
+                                    <td>{salida ? formatFechaCL(salida.time) : '—'}</td>
+                                    <td>{llegada ? formatFechaCL(llegada.time) : '—'}</td>
                                     <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
                                     <td>
-                                      {salida && llegada
-                                        ? `${formatFechaCL(salida.time)} → ${formatFechaCL(llegada.time)}`
-                                        : '—'}
-                                    </td>
-                                    <td>
-                                      <button className="btn btn-sm btn-warning" onClick={() => handleEditar(servicio)}>
-                                        <i className="bi bi-pencil-square"></i>
-                                      </button>{' '}
-                                      <button className="btn btn-sm btn-danger" onClick={() => handleEliminar(servicio._id)}>
+                                      <button
+                                        className="btn btn-sm btn-danger"
+                                        onClick={() => handleEliminar(servicio._id)}
+                                      >
                                         <i className="bi bi-trash"></i>
                                       </button>
                                     </td>
@@ -722,163 +571,6 @@ const Servicios = () => {
         </main>
       </div> 
     
-      {/* Modal layout asientos */} 
-      <ModalBase
-        visible={modalVisible}
-        title={
-          servicioSeleccionado
-            ? `Asientos de: ${servicioSeleccionado.routeMaster?.origin} → ${servicioSeleccionado.routeMaster?.destination}`
-            : "Asientos"
-        }
-        onClose={() => setModalVisible(false)}
-        size="xl"
-        footer={null}
-      >
-        {servicioSeleccionado && (() => {
-          const isDoubleDecker = servicioSeleccionado.layout?.includes('double');
-          const seatsByFloor = { first: [], second: [] };
-
-          servicioSeleccionado.seats.forEach(seat => {
-            const fila = parseInt(seat.number.match(/\d+/)?.[0]);
-            if (isDoubleDecker) {
-              if (fila <= 4) {
-                seatsByFloor.first.push(seat);
-              } else {
-                seatsByFloor.second.push(seat);
-              }
-            } else {
-              seatsByFloor.first.push(seat);
-            }
-          });
-
-          const renderPiso = (seats, piso, descripcion) => {
-          const filas = {};
-
-          seats.forEach(seat => {
-            const match = seat.number.match(/^(\d+)([A-Z])$/);
-            if (!match) return;
-
-            const [, num, letra] = match;
-            if (!filas[num]) filas[num] = { left: [], right: [] };
-
-            if (letra === 'A' || letra === 'B') {
-              filas[num].left.push(seat);
-            } else {
-              filas[num].right.push(seat);
-            }
-          });
-
-          const resumenPiso = seats.reduce((acc, seat) => {
-            if (seat.paid) {
-              acc.pagados++;
-              acc.ocupados++;
-            } else if (seat.reserved) {
-              acc.reservados++;
-              acc.ocupados++;
-            } else {
-              acc.disponibles++;
-            }
-            return acc;
-          }, { disponibles: 0, reservados: 0, pagados: 0, ocupados: 0 });
-
-          return (
-            <div key={piso} className="mb-5">
-              <h6 className="text-muted">
-                Piso {piso === 'first' ? '1' : '2'} ({descripcion})
-              </h6>
-              <div className="d-flex flex-column gap-1 border rounded p-3 bg-light align-items-center">             
-                
-                {Object.keys(filas)
-                  .sort((a, b) => parseInt(a) - parseInt(b))
-                  .map(fila => {
-                    const { left, right } = filas[fila];
-                    return (
-                      <div key={fila} className="d-flex gap-3 justify-content-center align-items-center">
-                        <div className="d-flex gap-2">
-                          {left.map(seat => {
-                            const statusClass = seat.paid
-                              ? 'btn-danger'
-                              : seat.reserved
-                              ? 'btn-warning'
-                              : 'btn-success';
-                            return (
-                              <button
-                                key={seat._id}
-                                className={`btn ${statusClass} btn-sm`}
-                                disabled
-                                style={{ width: 48 }}
-                                title={`${seat.number} - ${seat.paid ? 'Pagado' : seat.reserved ? 'Reservado' : 'Disponible'}`}
-                              >
-                                {seat.number}
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div style={{ width: '24px' }} />
-
-                        <div className="d-flex gap-2">
-                          {right.map(seat => {
-                            const statusClass = seat.paid
-                              ? 'btn-danger'
-                              : seat.reserved
-                              ? 'btn-warning'
-                              : 'btn-success';
-                            return (
-                              <button
-                                key={seat._id}
-                                className={`btn ${statusClass} btn-sm`}
-                                disabled
-                                style={{ width: 48 }}
-                                title={`${seat.number} - ${seat.paid ? 'Pagado' : seat.reserved ? 'Reservado' : 'Disponible'}`}
-                              >
-                                {seat.number}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-
-              <p className="mt-2 small text-muted">
-                Disponibles: <strong>{resumenPiso.disponibles}</strong> &nbsp;|&nbsp;
-                Reservados: <strong>{resumenPiso.reservados}</strong> &nbsp;|&nbsp;
-                Pagados: <strong>{resumenPiso.pagados}</strong> &nbsp;|&nbsp;
-                Total ocupados: <strong>{resumenPiso.ocupados}</strong>
-              </p>
-            </div>
-          );
-        };
-
-          return (
-            <div>
-              <div className="mb-3">
-                <span className="badge bg-success me-2">Disponible</span>
-                <span className="badge bg-warning text-dark me-2">Reservado</span>
-                <span className="badge bg-danger">Pagado</span>
-              </div>
-              {renderPiso(
-                seatsByFloor.first,
-                'first',
-                servicioSeleccionado.seatDescriptionFirst || 'Piso inferior'
-              )}
-              {isDoubleDecker && renderPiso(
-                seatsByFloor.second,
-                'second',
-                servicioSeleccionado.seatDescriptionSecond || 'Piso superior'
-              )}
-              <div className="mt-3">
-                <strong>
-                  {servicioSeleccionado.seats.filter(s => !s.paid && !s.reserved).length} asientos disponibles
-                </strong>
-              </div>
-            </div>
-          );
-        })()}
-      </ModalBase>
-
       <ModalBase
         visible={exportModalVisible}
         title="Exportar servicios a CSV"
