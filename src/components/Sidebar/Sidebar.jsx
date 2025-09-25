@@ -44,10 +44,6 @@ const Sidebar = ({ activeItem }) => {
       <Link to="/rutas" className={activeItem === 'rutas' ? 'active' : ''}>
           <Route className="me-2" /> Rutas
       </Link>
-
-      <Link to="/blocks" className={activeItem === 'blocks' ? 'active' : ''}>
-          <LayoutGrid className="me-2" /> Bloques de rutas
-      </Link>      
       
       <Link to="/buses" className={activeItem === 'buses' ? 'active' : ''}>
           <BusFront className="me-2" /> Buses

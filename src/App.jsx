@@ -10,7 +10,6 @@ import Terminales from './pages/Terminales';
 import Companias from './pages/Companias';
 import Buses from './pages/Buses';
 import Layouts from './pages/Layouts';
-import Blocks from './pages/Blocks';
 import { ToastContainer } from '@components/Toast/Toast';
 
 function App() {
@@ -29,7 +28,6 @@ function App() {
         <Route path="/companias" element={<Companias />} />
         <Route path="/buses" element={<Buses />} />
         <Route path="/layouts" element={<Layouts />} />
-        <Route path="/blocks" element={<Blocks />} />
       </Routes>
     </BrowserRouter>
   );
