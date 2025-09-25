@@ -4,6 +4,7 @@
     "@hello-pangea/dnd": "^18.0.1",
     "bootstrap": "^5.3.7",
     "bootstrap-icons": "^1.13.1",
+    "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "lucide-react": "^0.535.0",
     "moment": "^2.30.1",

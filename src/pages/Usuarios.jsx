@@ -4,8 +4,10 @@ import '@components/Dashboard/dashboard.css';
 import ModalBase from '@components/ModalBase/ModalBase';
 import { showToast } from '@components/Toast/Toast';
 
-//const API_URL = "https://bcentinela.dev-wit.com/api";
-const API_URL = "http://localhost:3000/api"; // dev
+const API_URL = import.meta.env.VITE_API_URL;
+if (!API_URL) {
+  throw new Error("❌ No se encontró VITE_API_URL en el entorno");
+}
 const USERS_ENDPOINT = `${API_URL}/users`;
 
 const Usuarios = () => {

@@ -7,6 +7,13 @@ import { showToast } from '@components/Toast/Toast';
 import SeatGridEditor from '../components/SeatGridEditor/SeatGridEditor';
 import Swal from 'sweetalert2';
 
+const API_URL = import.meta.env.VITE_API_URL;
+if (!API_URL) {
+  throw new Error("❌ No se encontró VITE_API_URL en el entorno");
+}
+
+const LAYOUTS_ENDPOINT = `${API_URL}/bus-layout`;
+
 const Layout = () => {
   const [layouts, setLayouts] = useState([]);
   const [cargando, setCargando] = useState(true);   
@@ -76,7 +83,11 @@ const Layout = () => {
     try {
       if (!layout?._id) throw new Error('Este layout no tiene _id. No se puede cargar.');
 
-      const res = await fetch(`https://bcentinela.dev-wit.com/api/layouts/${layout._id}`);
+      const res = await fetch(`${LAYOUTS_ENDPOINT}/${layout._id}`, {
+        headers: {
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
+      });
 
       if (!res.ok) throw new Error('No se pudo cargar el layout completo');
       const fullLayout = await res.json();
@@ -127,8 +138,11 @@ const Layout = () => {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://bcentinela.dev-wit.com/api/layouts/${_id}`, {
+      const res = await fetch(`${LAYOUTS_ENDPOINT}/${_id}`, {
         method: 'DELETE',
+        headers: {
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
       });
       await showToast('Layout eliminado', 'El layout fue eliminado exitosamente.');
 
@@ -144,7 +158,11 @@ const Layout = () => {
     const fetchLayouts = async () => {
       setCargando(true);
       try {
-        const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
+        const res = await fetch(`${LAYOUTS_ENDPOINT}/`, {
+          headers: {
+            "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+          },
+        });
         const text = await res.text();
         let body;
         try {
@@ -284,14 +302,17 @@ const Layout = () => {
 
     try {
       const url = layoutEditando
-      ? `https://bcentinela.dev-wit.com/api/layouts/${layoutEditando}`
-      : 'https://bcentinela.dev-wit.com/api/layouts/';
+        ? `${LAYOUTS_ENDPOINT}/${layoutEditando}`
+        : `${LAYOUTS_ENDPOINT}/`;
       const method = layoutEditando ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) throw new Error(`Error al ${layoutEditando ? 'actualizar' : 'crear'} layout`);
@@ -304,7 +325,11 @@ const Layout = () => {
 
       // Recarga la lista desde el backend
       setCargando(true);
-      const resList = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
+      const resList = await fetch(`${LAYOUTS_ENDPOINT}/`, {
+        headers: {
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
+      });
       const data = await resList.json();
       setLayouts(data.map(layout => ({
         ...layout,
@@ -599,7 +624,11 @@ const Layout = () => {
                 onClick={async () => {
                   setActualizando(true);
                   try {
-                    const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
+                    const res = await fetch(`${LAYOUTS_ENDPOINT}/`, {
+                      headers: {
+                        "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+                      },
+                    });
                     if (!res.ok) throw new Error('Error al obtener layouts desde el servidor');
                     const data = await res.json();
 
