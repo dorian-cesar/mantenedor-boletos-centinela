@@ -13,19 +13,25 @@ if (!API_URL) {
 // Endpoints usados en este componente
 const SERVICES_ENDPOINT  = `${API_URL}/services`;
 const LAYOUTS_ENDPOINT   = `${API_URL}/bus-layout`;
-const CITIES_ENDPOINT    = `${API_URL}/cities`;
-const ROUTES_ENDPOINT    = `${API_URL}/routes`;
+const ROUTES_ENDPOINT    = `${API_URL}/route-masters`;
+
+const formatHoraCL = (iso) =>
+  new Date(iso).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+
+const formatFechaCL = (iso) =>
+  new Date(iso).toLocaleDateString("es-CL");
+
+const minutesToHhMm = (min = 0) => {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+};
 
 const Servicios = () => {
-  const formatearFecha = (fechaStr) => {
-    const [a, m, d] = fechaStr.split("-");
-    return `${d.padStart(2, '0')}-${m.padStart(2, '0')}-${a}`;
-  };
   const [todosLosServicios, setTodosLosServicios] = useState([]);  
   const [serviciosFiltrados, setServiciosFiltrados] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
   const [modalNuevoVisible, setModalNuevoVisible] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
   const [servicioSeleccionado, setServicioSeleccionado] = useState(null);
   const [busqueda, setBusqueda] = useState(''); 
   const [nuevoServicio, setNuevoServicio] = useState({
@@ -46,24 +52,28 @@ const Servicios = () => {
     arrivalDate: '',
     arrivalTime: ''
   });  
-  
+  const [filtroOrigen, setFiltroOrigen] = useState('');
+  const [filtroDestino, setFiltroDestino] = useState('');
+  const [cargando, setCargando] = useState(false);
+
+
+  const origenes = useMemo(() => {
+    const set = new Set(todosLosServicios.map(s => s.routeMaster?.origin).filter(Boolean));
+    return Array.from(set).sort();
+  }, [todosLosServicios]);
+
+  const destinos = useMemo(() => {
+    const set = new Set(todosLosServicios.map(s => s.routeMaster?.destination).filter(Boolean));
+    return Array.from(set).sort();
+  }, [todosLosServicios]);
   const [layouts, setLayouts] = useState([]);
   const layoutSeleccionado = layouts.find(l => l.name === nuevoServicio.busLayout);
   const tieneDosPisos = layoutSeleccionado?.pisos === 2;
-  const [ciudades, setCiudades] = useState([]);
-  const [modalEditarVisible, setModalEditarVisible] = useState(false);
-  const [servicioEditando, setServicioEditando] = useState(null);
-  const [editandoServicioId, setEditandoServicioId] = useState(null);
   const [orden, setOrden] = useState('hora');
   const [ordenAscendente, setOrdenAscendente] = useState(true);
   const [fechaSeleccionada, setFechaSeleccionada] = useState(null);
   const [serviciosPorFecha, setServiciosPorFecha] = useState({});   
   const [fechasTabs, setFechasTabs] = useState([]);
-  const [origenesDestinos, setOrigenesDestinos] = useState([]);
-  const [origenSeleccionado, setOrigenSeleccionado] = useState('');
-  const [destinosDisponibles, setDestinosDisponibles] = useState([]);
-  const [destinoSeleccionado, setDestinoSeleccionado] = useState('');
-  const [origenesDisponibles, setOrigenesDisponibles] = useState([]);
   const [actualizando, setActualizando] = useState(false);  
 
   // === Exportación a CSV ===
@@ -79,32 +89,37 @@ const Servicios = () => {
 
   const buildCSV = (rows) => {
     const header = [
-      'ID','Origen','Destino','TerminalOrigen','TerminalDestino',
-      'FechaSalida','HoraSalida','FechaLlegada','HoraLlegada',
-      'TipoBus','Precio1Piso','Precio2Piso','Compañía','Layout'
+      'ID',
+      'Origen',
+      'Destino',
+      'Ruta',
+      'Layout',
+      'FechaSalida',
+      'HoraSalida',
+      'FechaLlegada',
+      'HoraLlegada',
+      'Duración'
     ];
     const lines = [header.map(escapeCSV).join(',')];
 
     rows.forEach(s => {
+      const salida = s.departures?.[0];
+      const llegada = s.departures?.at(-1);
+
       lines.push([
         s._id,
-        s.origin,
-        s.destination,
-        s.terminalOrigin,
-        s.terminalDestination,
-        s.date,           // ya la normalizas a YYYY-MM-DD
-        s.departureTime,
-        s.arrivalDate,    // en fetchServicios la pasas a YYYY-MM-DD
-        s.arrivalTime,
-        s.busTypeDescription,
-        s.priceFirst,
-        s.priceSecond,
-        s.company,
-        s.busLayout
+        s.routeMaster?.origin || '',
+        s.routeMaster?.destination || '',
+        s.routeMaster?.name || '',
+        s.layout?.name || '',
+        salida ? new Date(salida.time).toLocaleDateString("es-CL") : '',
+        salida ? new Date(salida.time).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : '',
+        llegada ? new Date(llegada.time).toLocaleDateString("es-CL") : '',
+        llegada ? new Date(llegada.time).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : '',
+        minutesToHhMm(s.routeMaster?.durationMinutes || 0)
       ].map(escapeCSV).join(','));
     });
 
-    // BOM para acentos en Excel
     return '\uFEFF' + lines.join('\r\n');
   };
 
@@ -153,20 +168,14 @@ const Servicios = () => {
 
     return [...lista].sort((a, b) => {
       if (criterio === 'hora') {
-        const toMin = (s) => {
-          if (!s || !/^\d{1,2}:\d{2}$/.test(s)) return Number.POSITIVE_INFINITY;
-          const [h, m] = s.split(':').map(Number);
-          return (isNaN(h) || isNaN(m)) ? Number.POSITIVE_INFINITY : h * 60 + m;
-        };
-        return sign * (toMin(a.departureTime) - toMin(b.departureTime));
+        return sign * (new Date(a.date) - new Date(b.date));
       }
-
       if (criterio === 'tipoBus') {
-        const diff = (a.busTypeDescription || '').localeCompare(b.busTypeDescription || '');
-        return sign * diff;
+        const A = (a.layout?.name || '').toLowerCase();
+        const B = (b.layout?.name || '').toLowerCase();
+        return sign * A.localeCompare(B);
       }
-
-      return 0; // 'fecha' no reordena
+      return 0;
     });
   };
 
@@ -257,36 +266,24 @@ const Servicios = () => {
   }, []);
 
   useEffect(() => {
-    const obtenerCiudades = async () => {
-      try {
-        const res = await fetch(`${CITIES_ENDPOINT}`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` } });
-        const data = await res.json();
-        setCiudades(data);
-      } catch (error) {
-        console.error("Error al obtener ciudades:", error);
-      }
-    };
-
-    obtenerCiudades();
-  }, []);
-
-  useEffect(() => {
     fetchServicios();
   }, []);
 
   useEffect(() => {
-    if (!fechaSeleccionada) return;
-
-    const listaBase = 
+    const base =
       fechaSeleccionada === "todos"
         ? todosLosServicios
         : (serviciosPorFecha[fechaSeleccionada] || []);
 
-    const filtrados = listaBase.filter((s) => {
-      const coincideOrigen = !origenSeleccionado || s.origin === origenSeleccionado;
-      const coincideDestino = !destinoSeleccionado || s.destination === destinoSeleccionado;
-      const texto = `${s.origin} ${s.destination} ${s._id}`.toLowerCase();
-      return coincideOrigen && coincideDestino && texto.includes(busqueda.toLowerCase());
+    const text = (busqueda || '').toLowerCase();
+
+    const filtrados = base.filter((s) => {
+      const rm = s.routeMaster || {};
+      const coincideOrigen = !filtroOrigen || rm.origin === filtroOrigen;
+      const coincideDestino = !filtroDestino || rm.destination === filtroDestino;
+      const texto = `${rm.name} ${rm.origin} ${rm.destination} ${s._id} ${s.layout?.name || ''}`.toLowerCase();
+      const coincideTexto = !text || texto.includes(text);
+      return coincideOrigen && coincideDestino && coincideTexto;
     });
 
     const ordenados = ordenarServicios(filtrados, orden, ordenAscendente);
@@ -298,147 +295,49 @@ const Servicios = () => {
     busqueda,
     orden,
     ordenAscendente,
-    origenSeleccionado,
-    destinoSeleccionado
-  ]);  
+    filtroOrigen,
+    filtroDestino
+  ]); 
 
-  useEffect(() => {
-    const cargarOrigenes = async () => {
-      try {
-        const res = await fetch(`${ROUTES_ENDPOINT}/origins`, { headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` } });
-        const data = await res.json();
-        setOrigenesDestinos(data);
-      } catch (error) {
-        console.error('Error cargando origenes:', error);
-      }
-    };
-
-    cargarOrigenes();
-  }, []);
-
-  useEffect(() => {
-    const origen = origenesDestinos.find((o) => o.origen === origenSeleccionado);
-    setDestinosDisponibles(origen ? origen.destinos : []);
-    setDestinoSeleccionado('');
-  }, [origenSeleccionado]); 
-
-  useEffect(() => {
-    if (!destinoSeleccionado) {
-      setOrigenesDisponibles([]);
-      return;
+  const groupByDate = (items) => {
+    const map = {};
+    for (const s of items) {
+      const key = new Date(s.date).toISOString().slice(0, 10); // YYYY-MM-DD de la salida real
+      (map[key] ||= []).push(s);
     }
-
-    const posiblesOrigenes = origenesDestinos
-      .filter((o) => o.destinos.includes(destinoSeleccionado))
-      .map((o) => o.origen);
-
-    setOrigenesDisponibles(posiblesOrigenes);
-  }, [destinoSeleccionado]);
+    return map;
+  };
 
   const fetchServicios = async () => {
+    setCargando(true);
     try {
-      setCargando(true);
-      const token =
-        sessionStorage.getItem("token") ||
-        JSON.parse(localStorage.getItem("recordarSession") || "{}").token;
-
-      const res = await fetch(`${SERVICES_ENDPOINT}/`, {
+      const res = await fetch(SERVICES_ENDPOINT, {
         headers: {
+          "Content-Type": "application/json",
           "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
         },
       });
 
       if (!res.ok) throw new Error("No se pudieron obtener los servicios.");
+
       const data = await res.json();
 
-      const hoy = new Date();
-      hoy.setHours(0, 0, 0, 0);
+      setTodosLosServicios(data);
 
-      const serviciosNormalizados = data.map((servicio) => {
-        const fechaServicio = new Date(servicio.date);
-        const fechaNormalizada = fechaServicio.toLocaleDateString("sv-SE"); // YYYY-MM-DD
+      const porFecha = groupByDate(data);
+      setServiciosPorFecha(porFecha);
+      setFechasTabs(Object.keys(porFecha).sort());
 
-        return {
-          ...servicio,
-          fechaNormalizada,
-          date: fechaNormalizada,
-          arrivalDate: new Date(servicio.arrivalDate).toISOString().split("T")[0],
-        };
-      });
+      setFechaSeleccionada("todos");
+      setServiciosFiltrados(data);
 
-      // Agrupar por fecha
-      const serviciosPorFechaTmp = {};
-      serviciosNormalizados.forEach((servicio) => {
-        const fecha = servicio.fechaNormalizada;
-        if (!serviciosPorFechaTmp[fecha]) serviciosPorFechaTmp[fecha] = [];
-        serviciosPorFechaTmp[fecha].push(servicio);
-      });
-
-      // Generar fechas para los tabs
-      const fechasTabs = [];
-      const ayer = new Date(hoy);
-      ayer.setDate(hoy.getDate() - 1);
-      fechasTabs.push(ayer.toLocaleDateString("sv-SE"));
-      fechasTabs.push(hoy.toLocaleDateString("sv-SE"));
-      for (let i = 1; i <= 6; i++) {
-        const dia = new Date(hoy);
-        dia.setDate(hoy.getDate() + i);
-        fechasTabs.push(dia.toLocaleDateString("sv-SE"));
-      }
-
-      // Actualizar estados
-      setTodosLosServicios(serviciosNormalizados); // ✅ Aquí cargas todos
-      setServiciosPorFecha(serviciosPorFechaTmp);
-      setFechasTabs(fechasTabs);
-
-      // Establecer fecha seleccionada si no hay una ya
-      if (!fechaSeleccionada) {
-        setFechaSeleccionada(hoy.toLocaleDateString("sv-SE"));
-      }
-
-      // Inicializar serviciosFiltrados si corresponde
-      const hoyStr = hoy.toLocaleDateString("sv-SE");
-      if (serviciosPorFechaTmp[hoyStr]) {
-        setServiciosFiltrados(
-          ordenarServicios(serviciosPorFechaTmp[hoyStr], orden, ordenAscendente)
-        );
-      } else {
-        setServiciosFiltrados([]);
-      }
-    } catch (error) {
-      console.error("Error al cargar servicios:", error);
-      showToast("Error", "No se pudieron cargar los servicios.", true);
+      return true; // ✅ éxito
     } finally {
       setCargando(false);
     }
   };
 
-  const handleBuscar = (e) => {
-    const texto = e.target.value.toLowerCase();
-    setBusqueda(texto);
-
-    if (!texto) {
-      // Si no hay texto de búsqueda, mostrar todos los servicios de la fecha seleccionada
-      setServiciosFiltrados(serviciosPorFecha[fechaSeleccionada] || []);
-      return;
-    }
-
-    // Filtrar los servicios de la fecha seleccionada
-    const serviciosFecha = serviciosPorFecha[fechaSeleccionada] || [];
-    const filtrados = serviciosFecha.filter((s) => {
-      return (
-        s.origin.toLowerCase().includes(texto) ||
-        s.destination.toLowerCase().includes(texto) ||
-        s._id.toLowerCase().includes(texto) ||
-        s.terminalOrigin.toLowerCase().includes(texto) ||
-        s.terminalDestination.toLowerCase().includes(texto) ||
-        s.busTypeDescription.toLowerCase().includes(texto) ||
-        s.company.toLowerCase().includes(texto)
-      );
-    });
-
-    setServiciosFiltrados(filtrados);
-  };  
+  const handleBuscar = (e) => setBusqueda(e.target.value); 
 
   const handleNuevoChange = (e) => {
     const { name, value } = e.target;
@@ -544,55 +443,6 @@ const Servicios = () => {
     }
   };  
 
-  const tiposDeBus = [
-    {
-      tipo: "Salón-Ejecutivo",
-      descripcionPiso1: "Asientos ejecutivo",
-      descripcionPiso2: "Ejecutivo estándar"
-    },
-    {
-      tipo: "Semi-cama",
-      descripcionPiso1: "Semi-cama normal",
-      descripcionPiso2: "Semi-cama reclinable"
-    },
-    {
-      tipo: "Cama",
-      descripcionPiso1: "Cama total",
-      descripcionPiso2: "Cama reclinable"
-    },
-    {
-      tipo: "Premium",
-      descripcionPiso1: "Butaca Premium",
-      descripcionPiso2: "Butaca Premium Relax"
-    }
-  ];
-
-  const terminales = [
-    "Terminal Alameda",
-    "Terminal Sur Santiago",
-    "Terminal Rodoviario Antofagasta",
-    "Terminal de Buses Temuco",
-    "Terminal de Buses Valparaíso",
-    "Terminal de Buses Concepción",
-    "Terminal de Buses Osorno",
-    "Terminal de Buses Iquique",
-    "Terminal de Buses Chillán",
-    "Terminal de Buses Puerto Montt"
-  ];
-
-  const companias = [
-    "BusesExpress",
-    "TurBus",
-    "Pullman Bus",
-    "Condor Bus",
-    "JetSur",
-    "Buses Romani",
-    "Buses BioBio",
-    "Andesmar Chile",
-    "Via Costa",
-    "Expreso Norte"
-  ];   
-
   return (
     <>
       <div className="dashboard-container">
@@ -622,11 +472,17 @@ const Servicios = () => {
                   onClick={async () => {
                     setActualizando(true);
                     try {
-                      await fetchServicios(); // reutiliza headers + normalización + agrupación
-                      showToast('Actualizado', 'Lista de servicios sincronizada correctamente.');
-                    } catch (e) {
-                      console.error(e);
-                      showToast('Error', 'No se pudo actualizar la lista de servicios', true);
+                      const ok = await fetchServicios();
+                      if (ok) {
+                        showToast('Actualizado', 'Lista de servicios sincronizada correctamente.');
+                      }
+                    } catch (err) {
+                      console.error(err);
+                      const mensaje =
+                        err.message === "Failed to fetch"
+                          ? "❌ No hay conexión con el servidor. Verifica tu red o que el backend esté activo."
+                          : err.message || "Ocurrió un error inesperado";
+                      showToast("Error", mensaje, true);
                     } finally {
                       setActualizando(false);
                     }
@@ -690,36 +546,25 @@ const Servicios = () => {
                 <label>Origen</label>
                 <select
                   className="form-select form-select-sm"
-                  value={origenSeleccionado}
-                  onChange={(e) => setOrigenSeleccionado(e.target.value)}
+                  value={filtroOrigen}
+                  onChange={(e) => setFiltroOrigen(e.target.value)}
                 >
                   <option value="">Todos</option>
-                  {(destinoSeleccionado
-                    ? origenesDisponibles
-                    : origenesDestinos.map((o) => o.origen)
-                  ).map((origen) => (
-                    <option key={origen} value={origen}>{origen}</option>
-                  ))}
+                  {origenes.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
               <div>
                 <label>Destino</label>
                 <select
                   className="form-select form-select-sm"
-                  value={destinoSeleccionado}
-                  onChange={(e) => setDestinoSeleccionado(e.target.value)}
+                  value={filtroDestino}
+                  onChange={(e) => setFiltroDestino(e.target.value)}
                 >
                   <option value="">Todos</option>
-                  {(origenSeleccionado
-                    ? destinosDisponibles
-                    : [...new Set(origenesDestinos.flatMap((o) => o.destinos))]
-                  ).map((destino) => (
-                    <option key={destino} value={destino}>{destino}</option>
-                  ))}
+                  {destinos.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
             </div>
-
 
             <Tabs
               activeKey={fechaSeleccionada}
@@ -733,43 +578,54 @@ const Servicios = () => {
                     <table className="table table-bordered table-hover align-middle">
                       <thead className="table-light">
                         <tr>
-                          {/* <th>ID Servicio</th> */}
                           <th>Origen → Destino</th>
-                          <th>Terminales</th>
+                          <th>Ruta</th>
+                          <th>Layout</th>
                           <th>Hora Salida</th>
                           <th>Hora Llegada</th>
-                          <th>Fecha salida</th>
-                          <th>Fecha llegada</th>
-                          <th>Tipo de Bus</th>
-                          <th>Precios</th>
+                          <th>Fecha Salida</th>
+                          <th>Fecha Llegada</th>
+                          <th>Duración</th>
                           <th>Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {serviciosFiltrados.map((servicio) => (
-                          <tr key={servicio._id}>
-                            {/* <td>{servicio._id}</td> */}
-                            <td>{servicio.origin} → {servicio.destination}</td>
-                            <td>{servicio.terminalOrigin} / {servicio.terminalDestination}</td>
-                            <td>{servicio.departureTime}</td>
-                            <td>{servicio.arrivalTime}</td>
-                            <td>{formatearFecha(servicio.date)}</td>
-                            <td>{formatearFecha(servicio.arrivalDate)}</td>
-                            <td>{servicio.busTypeDescription}</td>
-                            <td>
-                              1° piso: ${servicio.priceFirst}<br />
-                              2° piso: ${servicio.priceSecond}
-                            </td>
-                            <td>
-                              <button className="btn btn-sm btn-warning" onClick={() => handleEditar(servicio)}>
-                                <i className="bi bi-pencil-square"></i>
-                              </button>{' '}
-                              <button className="btn btn-sm btn-danger" onClick={() => handleEliminar(servicio._id)}>
-                                <i className="bi bi-trash"></i>
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {serviciosFiltrados.map((servicio) => {
+                          const salida = servicio.departures?.[0];
+                          const llegada = servicio.departures?.at(-1);
+
+                          return (
+                            <tr key={servicio._id}>
+                              <td>{servicio.routeMaster?.origin} → {servicio.routeMaster?.destination}</td>
+                              <td>{servicio.routeMaster?.name || '—'}</td>
+                              <td>{servicio.layout?.name || '—'}</td>
+                              <td>{salida ? formatHoraCL(salida.time) : '—'}</td>
+                              <td>{llegada ? formatHoraCL(llegada.time) : '—'}</td>
+                              <td>{salida ? formatFechaCL(salida.time) : '—'}</td>
+                              <td>{llegada ? formatFechaCL(llegada.time) : '—'}</td>
+                              <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
+                              <td>
+                                <button
+                                  className="btn btn-sm btn-info"
+                                  onClick={() => {
+                                    setServicioSeleccionado(servicio);
+                                    setModalVisible(true);
+                                  }}
+                                  title="Ver asientos"
+                                >
+                                  <i className="bi bi-eye"></i>
+                                </button>{' '}
+                                
+                                <button
+                                  className="btn btn-sm btn-danger"
+                                  onClick={() => handleEliminar(servicio._id)}
+                                >
+                                  <i className="bi bi-trash"></i>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -817,35 +673,38 @@ const Servicios = () => {
                                 <th>Fecha salida</th>
                                 <th>Fecha llegada</th>
                                 <th>Tipo de Bus</th>
-                                <th>Precios</th>
                                 <th>Acciones</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {serviciosFiltrados.map((servicio) => (
-                                <tr key={servicio._id}>
-                                  {/* <td>{servicio._id}</td> */}
-                                  <td>{servicio.origin} → {servicio.destination}</td>
-                                  <td>{servicio.terminalOrigin} / {servicio.terminalDestination}</td>
-                                  <td>{servicio.departureTime}</td>
-                                  <td>{servicio.arrivalTime}</td>
-                                  <td>{formatearFecha(servicio.date)}</td>
-                                  <td>{formatearFecha(servicio.arrivalDate)}</td>
-                                  <td>{servicio.busTypeDescription}</td>
-                                  <td>
-                                    1° piso: ${servicio.priceFirst}<br />
-                                    2° piso: ${servicio.priceSecond}
-                                  </td>
-                                  <td>
-                                    <button className="btn btn-sm btn-warning" onClick={() => handleEditar(servicio)}>
-                                      <i className="bi bi-pencil-square"></i>
-                                    </button>{' '}
-                                    <button className="btn btn-sm btn-danger" onClick={() => handleEliminar(servicio._id)}>
-                                      <i className="bi bi-trash"></i>
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
+                              {serviciosFiltrados.map((servicio) => {
+                                const salida = servicio.departures?.[0];
+                                const llegada = servicio.departures?.at(-1);
+
+                                return (
+                                  <tr key={servicio._id}>
+                                    <td>{servicio.routeMaster?.origin} → {servicio.routeMaster?.destination}</td>
+                                    <td>{servicio.routeMaster?.name || '—'}</td>
+                                    <td>{servicio.layout?.name || '—'}</td>
+                                    <td>{salida ? formatHoraCL(salida.time) : '—'}</td>
+                                    <td>{llegada ? formatHoraCL(llegada.time) : '—'}</td>
+                                    <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
+                                    <td>
+                                      {salida && llegada
+                                        ? `${formatFechaCL(salida.time)} → ${formatFechaCL(llegada.time)}`
+                                        : '—'}
+                                    </td>
+                                    <td>
+                                      <button className="btn btn-sm btn-warning" onClick={() => handleEditar(servicio)}>
+                                        <i className="bi bi-pencil-square"></i>
+                                      </button>{' '}
+                                      <button className="btn btn-sm btn-danger" onClick={() => handleEliminar(servicio._id)}>
+                                        <i className="bi bi-trash"></i>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>
@@ -861,449 +720,163 @@ const Servicios = () => {
             </Tabs>
           </div>
         </main>
-      </div>
-                        
-      {/* Modal Nuevo Servicio */}  
-      <ModalBase
-        visible={modalNuevoVisible}
-        title="Nuevo Servicio"
-        onClose={() => setModalNuevoVisible(false)}
-        footer={
-          <button className="btn btn-primary" onClick={crearNuevoServicio}>
-            Guardar
-          </button>
-        }>
-        <div className="row g-2">
-          <div className="col-md-6">
-            <label className="form-label">Ciudad Origen</label>
-            <select
-              name="origin"
-              className="form-control"
-              value={nuevoServicio.origin}
-              onChange={handleNuevoChange}
-            >
-              <option value="">Seleccione Origen</option>
-              {ciudades.map((ciudad) => (
-                <option key={ciudad._id} value={ciudad.name}>
-                  {ciudad.name} ({ciudad.region})
-                </option>
-              ))}
-            </select>
-          </div>
-
-
-          <div className="col-md-6">
-            <label className="form-label">Ciudad Destino</label>
-            <select
-              name="destination"
-              className="form-control"
-              value={nuevoServicio.destination}
-              onChange={handleNuevoChange}
-            >
-              <option value="">Seleccione Destino</option>
-              {ciudades.map((ciudad) => (
-                <option key={ciudad._id} value={ciudad.name}>
-                  {ciudad.name} ({ciudad.region})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Terminal Origen</label>
-            <select
-              name="terminalOrigin"
-              className="form-control"
-              onChange={handleNuevoChange}
-            >
-              <option value="">Seleccione Terminal</option>
-              {terminales.map((terminal, i) => (
-                <option key={i} value={terminal}>{terminal}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Terminal Destino</label>
-            <select
-              name="terminalDestination"
-              className="form-control"
-              onChange={handleNuevoChange}
-            >
-              <option value="">Seleccione Terminal</option>
-              {terminales.map((terminal, i) => (
-                <option key={i} value={terminal}>{terminal}</option>
-              ))}
-            </select>
-          </div> 
-
-          <div className="col-md-6">
-            <label className="form-label">Fecha de Salida</label>
-            <input type="date" name="startDate" className="form-control" onChange={handleNuevoChange} />
-          </div>
-          <div className="col-md-6">
-            <label className="form-label">Hora de Salida</label>
-            <input type="time" name="time" className="form-control" onChange={handleNuevoChange} />
-          </div>
-          <div className="col-md-6">
-            <label className="form-label">Fecha Llegada</label>
-            <input type="date" name="arrivalDate" className="form-control" onChange={handleNuevoChange} />
-          </div>
-          <div className="col-md-6">
-            <label className="form-label">Hora Llegada</label>
-            <input type="time" name="arrivalTime" className="form-control" onChange={handleNuevoChange} />
-          </div>
-          <div className="col-md-6">
-            <label className="form-label">Días vigente</label>
-            <div className="d-flex flex-wrap gap-1">
-              {[1,2,3,4,5,6,7].map(d => (
-                <button
-                  key={d}
-                  type="button"
-                  className={`btn btn-sm ${nuevoServicio.days.includes(d) ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => handleDaysChange(d)}
-                >
-                  {['L', 'M', 'X', 'J', 'V', 'S', 'D'][d-1]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Compañía</label>
-            <select
-              name="company"
-              className="form-control"
-              onChange={handleNuevoChange}
-            >
-              <option value="">Seleccione Compañía</option>
-              {companias.map((c, i) => (
-                <option key={i} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Layout del Bus</label>
-            <select
-              name="busLayout"
-              className="form-control"
-              onChange={(e) => {
-                handleNuevoChange(e);
-
-                const layoutSeleccionado = layouts.find(l => l.name === e.target.value);
-                if (layoutSeleccionado?.pisos !== 2) {
-                  // Limpiar segundo piso si el layout no tiene 2 pisos
-                  setNuevoServicio(prev => ({
-                    ...prev,
-                    seatDescriptionSecond: ""
-                  }));
-                }
-              }}
-            >
-              <option value="">Seleccione layout</option>
-              {layouts.map((layout, i) => (
-                <option key={i} value={layout.name}>{layout.name}</option>
-              ))}
-            </select>
-            {nuevoServicio.busLayout && (
-              <div className="mt-2 small text-muted">
-                {(() => {
-                  const selected = layouts.find(l => l.name === nuevoServicio.busLayout);
-                  if (!selected) return null;
-
-                  const info = [];
-                  if (selected.pisos) info.push(`Pisos: ${selected.pisos}`);
-                  if (selected.capacidad) info.push(`Capacidad: ${selected.capacidad}`);
-                  if (selected.tipo_Asiento_piso_1) info.push(`1° piso: ${selected.tipo_Asiento_piso_1}`);
-                  if (selected.tipo_Asiento_piso_2) info.push(`2° piso: ${selected.tipo_Asiento_piso_2}`);
-                  if (selected.rows && selected.columns) info.push(`Filas: ${selected.rows}, Columnas: ${selected.columns}`);
-
-                  return info.join(' | ');
-                })()}
-              </div>
-            )}
-
-          </div>
-          
-          <div className="col-md-6">
-            <label className="form-label">Tipo de Bus</label>
-            <select
-              name="busTypeDescription"
-              className="form-control"
-              onChange={(e) => {
-                const tipo = e.target.value;
-                const match = tiposDeBus.find(t => t.tipo === tipo);
-                handleNuevoChange({ target: { name: 'busTypeDescription', value: tipo } });
-                handleNuevoChange({ target: { name: 'seatDescriptionFirst', value: match?.descripcionPiso1 || '' } });
-                handleNuevoChange({ target: { name: 'seatDescriptionSecond', value: match?.descripcionPiso2 || '' } });
-              }}
-            >
-              <option value="">Seleccione tipo</option>
-              {tiposDeBus.map((t, i) => (
-                <option key={i} value={t.tipo}>{t.tipo}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Descripción 1° Piso</label>
-            <select
-              name="seatDescriptionFirst"
-              className="form-control"
-              onChange={handleNuevoChange}
-              value={nuevoServicio.seatDescriptionFirst || ''}
-            >
-              <option value="">Seleccione descripción</option>
-              {[...new Set(tiposDeBus.map(t => t.descripcionPiso1))].map((desc, i) => (
-                <option key={i} value={desc}>{desc}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Descripción 2° Piso</label>
-            <select
-              name="seatDescriptionSecond"
-              className="form-control"
-              onChange={handleNuevoChange}
-              value={nuevoServicio.seatDescriptionSecond || ''}
-              disabled={!tieneDosPisos}
-            >
-              <option value="">{tieneDosPisos ? 'Seleccione descripción' : 'Solo 1 piso'}</option>
-              {[...new Set(tiposDeBus.map(t => t.descripcionPiso2))].map((desc, i) => (
-                <option key={i} value={desc}>{desc}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Precio 1° Piso</label>
-            <input
-              type="number"
-              name="priceFirst"
-              className="form-control"
-              value={nuevoServicio.priceFirst ?? ''}
-              onChange={handleNuevoChange}
-              placeholder="Ej: 15000"
-            />
-          </div>
-
-          <div className="col-md-6">
-            <label className="form-label">Precio 2° Piso</label>
-            <input
-              type="number"
-              name="priceSecond"
-              className="form-control"
-              value={nuevoServicio.priceSecond ?? ''}
-              onChange={handleNuevoChange}
-              placeholder="Ej: 14000"
-            />
-          </div>
-                   
-        </div>
-      </ModalBase>  
-
-      {/* Modal Editar */}        
-      <ModalBase
-        visible={modalEditarVisible}
-        title="Editar Servicio"
-        onClose={() => {
-          setModalNuevoVisible(false);
-          setModoEdicion(false);
-          setNuevoServicio(valoresIniciales);
-        }}
-        footer={
-          <button
-            className="btn btn-primary"
-            onClick={actualizarServicio}
-          >
-            Guardar Cambios
-          </button>
-        }
-      >
-        {servicioEditando && (
-          <div className="row g-2">
-            <div className="col-md-6">
-              <label className="form-label">Ciudad Origen</label>
-              <input
-                type="text"
-                className="form-control"
-                name="origin"
-                value={servicioEditando.origin}
-                onChange={(e) =>
-                  setServicioEditando((prev) => ({ ...prev, origin: e.target.value }))
-                }
-              />
-            </div>
-            <div className="col-md-6">
-              <label className="form-label">Ciudad Destino</label>
-              <input
-                type="text"
-                className="form-control"
-                name="destination"
-                value={servicioEditando.destination}
-                onChange={(e) =>
-                  setServicioEditando((prev) => ({ ...prev, destination: e.target.value }))
-                }
-              />
-            </div>
-            {/* ... agrega los demás campos según lo que quieras editar */}
-          </div>
-        )}
-      </ModalBase>
+      </div> 
     
       {/* Modal layout asientos */} 
       <ModalBase
-              visible={modalVisible}
-              title={`Asientos de: ${servicioSeleccionado?.origin} → ${servicioSeleccionado?.destination}`}
-              onClose={() => setModalVisible(false)}
-              size="xl"
-              footer={null}
-            >
-              {servicioSeleccionado && (() => {
-                const isDoubleDecker = servicioSeleccionado.layout?.includes('double');
-                const seatsByFloor = { first: [], second: [] };
-      
-                servicioSeleccionado.seats.forEach(seat => {
-                  const fila = parseInt(seat.number.match(/\d+/)?.[0]);
-                  if (isDoubleDecker) {
-                    if (fila <= 4) {
-                      seatsByFloor.first.push(seat);
-                    } else {
-                      seatsByFloor.second.push(seat);
-                    }
-                  } else {
-                    seatsByFloor.first.push(seat);
-                  }
-                });
-      
-                const renderPiso = (seats, piso, descripcion) => {
-                const filas = {};
-      
-                seats.forEach(seat => {
-                  const match = seat.number.match(/^(\d+)([A-Z])$/);
-                  if (!match) return;
-      
-                  const [, num, letra] = match;
-                  if (!filas[num]) filas[num] = { left: [], right: [] };
-      
-                  if (letra === 'A' || letra === 'B') {
-                    filas[num].left.push(seat);
-                  } else {
-                    filas[num].right.push(seat);
-                  }
-                });
-      
-                const resumenPiso = seats.reduce((acc, seat) => {
-                  if (seat.paid) {
-                    acc.pagados++;
-                    acc.ocupados++;
-                  } else if (seat.reserved) {
-                    acc.reservados++;
-                    acc.ocupados++;
-                  } else {
-                    acc.disponibles++;
-                  }
-                  return acc;
-                }, { disponibles: 0, reservados: 0, pagados: 0, ocupados: 0 });
-      
-                return (
-                  <div key={piso} className="mb-5">
-                    <h6 className="text-muted">
-                      Piso {piso === 'first' ? '1' : '2'} ({descripcion})
-                    </h6>
-                    <div className="d-flex flex-column gap-1 border rounded p-3 bg-light align-items-center">             
-                      
-                      {Object.keys(filas)
-                        .sort((a, b) => parseInt(a) - parseInt(b))
-                        .map(fila => {
-                          const { left, right } = filas[fila];
-                          return (
-                            <div key={fila} className="d-flex gap-3 justify-content-center align-items-center">
-                              <div className="d-flex gap-2">
-                                {left.map(seat => {
-                                  const statusClass = seat.paid
-                                    ? 'btn-danger'
-                                    : seat.reserved
-                                    ? 'btn-warning'
-                                    : 'btn-success';
-                                  return (
-                                    <button
-                                      key={seat._id}
-                                      className={`btn ${statusClass} btn-sm`}
-                                      disabled
-                                      style={{ width: 48 }}
-                                      title={`${seat.number} - ${seat.paid ? 'Pagado' : seat.reserved ? 'Reservado' : 'Disponible'}`}
-                                    >
-                                      {seat.number}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-      
-                              <div style={{ width: '24px' }} />
-      
-                              <div className="d-flex gap-2">
-                                {right.map(seat => {
-                                  const statusClass = seat.paid
-                                    ? 'btn-danger'
-                                    : seat.reserved
-                                    ? 'btn-warning'
-                                    : 'btn-success';
-                                  return (
-                                    <button
-                                      key={seat._id}
-                                      className={`btn ${statusClass} btn-sm`}
-                                      disabled
-                                      style={{ width: 48 }}
-                                      title={`${seat.number} - ${seat.paid ? 'Pagado' : seat.reserved ? 'Reservado' : 'Disponible'}`}
-                                    >
-                                      {seat.number}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                    </div>
-      
-                    <p className="mt-2 small text-muted">
-                      Disponibles: <strong>{resumenPiso.disponibles}</strong> &nbsp;|&nbsp;
-                      Reservados: <strong>{resumenPiso.reservados}</strong> &nbsp;|&nbsp;
-                      Pagados: <strong>{resumenPiso.pagados}</strong> &nbsp;|&nbsp;
-                      Total ocupados: <strong>{resumenPiso.ocupados}</strong>
-                    </p>
-                  </div>
-                );
-              };
-      
-                return (
-                  <div>
-                    <div className="mb-3">
-                      <span className="badge bg-success me-2">Disponible</span>
-                      <span className="badge bg-warning text-dark me-2">Reservado</span>
-                      <span className="badge bg-danger">Pagado</span>
-                    </div>
-                    {renderPiso(
-                      seatsByFloor.first,
-                      'first',
-                      servicioSeleccionado.seatDescriptionFirst || 'Piso inferior'
-                    )}
-                    {isDoubleDecker && renderPiso(
-                      seatsByFloor.second,
-                      'second',
-                      servicioSeleccionado.seatDescriptionSecond || 'Piso superior'
-                    )}
-                    <div className="mt-3">
-                      <strong>
-                        {servicioSeleccionado.seats.filter(s => !s.paid && !s.reserved).length} asientos disponibles
-                      </strong>
-                    </div>
-                  </div>
-                );
-              })()}
+        visible={modalVisible}
+        title={
+          servicioSeleccionado
+            ? `Asientos de: ${servicioSeleccionado.routeMaster?.origin} → ${servicioSeleccionado.routeMaster?.destination}`
+            : "Asientos"
+        }
+        onClose={() => setModalVisible(false)}
+        size="xl"
+        footer={null}
+      >
+        {servicioSeleccionado && (() => {
+          const isDoubleDecker = servicioSeleccionado.layout?.includes('double');
+          const seatsByFloor = { first: [], second: [] };
+
+          servicioSeleccionado.seats.forEach(seat => {
+            const fila = parseInt(seat.number.match(/\d+/)?.[0]);
+            if (isDoubleDecker) {
+              if (fila <= 4) {
+                seatsByFloor.first.push(seat);
+              } else {
+                seatsByFloor.second.push(seat);
+              }
+            } else {
+              seatsByFloor.first.push(seat);
+            }
+          });
+
+          const renderPiso = (seats, piso, descripcion) => {
+          const filas = {};
+
+          seats.forEach(seat => {
+            const match = seat.number.match(/^(\d+)([A-Z])$/);
+            if (!match) return;
+
+            const [, num, letra] = match;
+            if (!filas[num]) filas[num] = { left: [], right: [] };
+
+            if (letra === 'A' || letra === 'B') {
+              filas[num].left.push(seat);
+            } else {
+              filas[num].right.push(seat);
+            }
+          });
+
+          const resumenPiso = seats.reduce((acc, seat) => {
+            if (seat.paid) {
+              acc.pagados++;
+              acc.ocupados++;
+            } else if (seat.reserved) {
+              acc.reservados++;
+              acc.ocupados++;
+            } else {
+              acc.disponibles++;
+            }
+            return acc;
+          }, { disponibles: 0, reservados: 0, pagados: 0, ocupados: 0 });
+
+          return (
+            <div key={piso} className="mb-5">
+              <h6 className="text-muted">
+                Piso {piso === 'first' ? '1' : '2'} ({descripcion})
+              </h6>
+              <div className="d-flex flex-column gap-1 border rounded p-3 bg-light align-items-center">             
+                
+                {Object.keys(filas)
+                  .sort((a, b) => parseInt(a) - parseInt(b))
+                  .map(fila => {
+                    const { left, right } = filas[fila];
+                    return (
+                      <div key={fila} className="d-flex gap-3 justify-content-center align-items-center">
+                        <div className="d-flex gap-2">
+                          {left.map(seat => {
+                            const statusClass = seat.paid
+                              ? 'btn-danger'
+                              : seat.reserved
+                              ? 'btn-warning'
+                              : 'btn-success';
+                            return (
+                              <button
+                                key={seat._id}
+                                className={`btn ${statusClass} btn-sm`}
+                                disabled
+                                style={{ width: 48 }}
+                                title={`${seat.number} - ${seat.paid ? 'Pagado' : seat.reserved ? 'Reservado' : 'Disponible'}`}
+                              >
+                                {seat.number}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div style={{ width: '24px' }} />
+
+                        <div className="d-flex gap-2">
+                          {right.map(seat => {
+                            const statusClass = seat.paid
+                              ? 'btn-danger'
+                              : seat.reserved
+                              ? 'btn-warning'
+                              : 'btn-success';
+                            return (
+                              <button
+                                key={seat._id}
+                                className={`btn ${statusClass} btn-sm`}
+                                disabled
+                                style={{ width: 48 }}
+                                title={`${seat.number} - ${seat.paid ? 'Pagado' : seat.reserved ? 'Reservado' : 'Disponible'}`}
+                              >
+                                {seat.number}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <p className="mt-2 small text-muted">
+                Disponibles: <strong>{resumenPiso.disponibles}</strong> &nbsp;|&nbsp;
+                Reservados: <strong>{resumenPiso.reservados}</strong> &nbsp;|&nbsp;
+                Pagados: <strong>{resumenPiso.pagados}</strong> &nbsp;|&nbsp;
+                Total ocupados: <strong>{resumenPiso.ocupados}</strong>
+              </p>
+            </div>
+          );
+        };
+
+          return (
+            <div>
+              <div className="mb-3">
+                <span className="badge bg-success me-2">Disponible</span>
+                <span className="badge bg-warning text-dark me-2">Reservado</span>
+                <span className="badge bg-danger">Pagado</span>
+              </div>
+              {renderPiso(
+                seatsByFloor.first,
+                'first',
+                servicioSeleccionado.seatDescriptionFirst || 'Piso inferior'
+              )}
+              {isDoubleDecker && renderPiso(
+                seatsByFloor.second,
+                'second',
+                servicioSeleccionado.seatDescriptionSecond || 'Piso superior'
+              )}
+              <div className="mt-3">
+                <strong>
+                  {servicioSeleccionado.seats.filter(s => !s.paid && !s.reserved).length} asientos disponibles
+                </strong>
+              </div>
+            </div>
+          );
+        })()}
       </ModalBase>
 
       <ModalBase
