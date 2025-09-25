@@ -462,6 +462,9 @@ const Rutas = () => {
                     <th>Duración</th>
                     <th>Dirección</th>
                     <th>Días de Servicio</th>
+                    <th>Vigencia</th>
+                    <th>Horizonte</th>
+                    <th>Excepciones</th>
                     <th>Paradas</th>
                     <th>Acciones</th>
                   </tr>
@@ -469,7 +472,7 @@ const Rutas = () => {
                 <tbody>
                   {rutasFiltradas.length === 0 && (
                     <tr>
-                      <td colSpan={9}>Sin resultados</td>
+                      <td colSpan={13}>Sin resultados</td>
                     </tr>
                   )}
 
@@ -541,13 +544,51 @@ const Rutas = () => {
                           </td>
                           <td>{ruta.direction || "—"}</td>
 
+                          {/* Días de servicio */}
                           <td>
                             {ruta.schedule?.daysOfWeek?.length > 0
                               ? ruta.schedule.daysOfWeek
-                                  .sort((a,b) => a-b)
-                                  .map(d => ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][d-1])
+                                  .sort((a, b) => a - b)
+                                  .map((d) => ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"][d - 1])
                                   .join(", ")
                               : "—"}
+                          </td>
+
+                          {/* Vigencia */}
+                          <td>
+                            {ruta.schedule?.startDate
+                              ? new Date(ruta.schedule.startDate).toLocaleDateString("es-CL")
+                              : "—"}{" "}
+                            -{" "}
+                            {ruta.schedule?.endDate
+                              ? new Date(ruta.schedule.endDate).toLocaleDateString("es-CL")
+                              : "—"}
+                          </td>
+
+                          {/* Horizonte */}
+                          <td>
+                            {ruta.schedule?.horizonDays
+                              ? `${ruta.schedule.horizonDays} días`
+                              : "—"}
+                          </td>
+
+                          {/* Excepciones */}
+                          <td>
+                            {ruta.schedule?.exceptions?.length > 0 ? (
+                              <ul className="list-unstyled mb-0 small">
+                                {ruta.schedule.exceptions.map((ex, i) => (
+                                  <li key={i}>
+                                    {ex.date
+                                      ? new Date(ex.date).toLocaleDateString("es-CL")
+                                      : "—"}{" "}
+                                    - {ex.type === "available" ? "Disponible" : "No disponible"}
+                                    {ex.reason ? ` (${ex.reason})` : ""}
+                                  </li>
+                                ))}
+                              </ul>
+                            ) : (
+                              "—"
+                            )}
                           </td>
 
                           <td>
@@ -606,7 +647,7 @@ const Rutas = () => {
 
                         {isExpanded(ruta._id) && (
                           <tr>
-                            <td colSpan={9}>
+                            <td colSpan={13}>
                               <div className="p-2 border rounded bg-light">
                                 <h6>Paradas</h6>
                                 {ruta.stops?.length > 0 ? (
@@ -621,18 +662,13 @@ const Rutas = () => {
                                     </thead>
                                     <tbody>
                                       {[...(ruta.stops || [])]
-                                        .sort(
-                                          (a, b) => (a.order || 0) - (b.order || 0)
-                                        )
+                                        .sort((a, b) => (a.order || 0) - (b.order || 0))
                                         .map((stop, i) => (
                                           <tr key={stop._id || i}>
                                             <td>{stop.order}</td>
                                             <td>{stop.name || "—"}</td>
                                             <td>
-                                              {formatHoraConDia(
-                                                ruta.startTime,
-                                                stop.offsetMinutes
-                                              )}
+                                              {formatHoraConDia(ruta.startTime, stop.offsetMinutes)}
                                               <br />
                                               <small className="text-muted">
                                                 ({stop.offsetMinutes} min)
@@ -644,9 +680,7 @@ const Rutas = () => {
                                     </tbody>
                                   </table>
                                 ) : (
-                                  <p className="text-muted mb-0">
-                                    No hay paradas registradas.
-                                  </p>
+                                  <p className="text-muted mb-0">No hay paradas registradas.</p>
                                 )}
                               </div>
                             </td>
@@ -833,6 +867,140 @@ const Rutas = () => {
               );
             })}
           </div>
+        </div>
+
+        {/* Fechas de vigencia */}
+        <div className="row mb-3">
+          <div className="col-md-6">
+            <label className="form-label">Fecha de inicio</label>
+            <input
+              type="date"
+              className="form-control"
+              value={formRuta.schedule.startDate ? formRuta.schedule.startDate.split("T")[0] : ""}
+              onChange={(e) =>
+                setFormRuta((prev) => ({
+                  ...prev,
+                  schedule: { ...prev.schedule, startDate: e.target.value || null },
+                }))
+              }
+            />
+          </div>
+          <div className="col-md-6">
+            <label className="form-label">Fecha de término</label>
+            <input
+              type="date"
+              className="form-control"
+              value={formRuta.schedule.endDate ? formRuta.schedule.endDate.split("T")[0] : ""}
+              onChange={(e) =>
+                setFormRuta((prev) => ({
+                  ...prev,
+                  schedule: { ...prev.schedule, endDate: e.target.value || null },
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label">Horizonte de generación (días)</label>
+          <input
+            type="number"
+            className="form-control"
+            min="1"
+            value={formRuta.schedule.horizonDays}
+            onChange={(e) =>
+              setFormRuta((prev) => ({
+                ...prev,
+                schedule: { ...prev.schedule, horizonDays: Number(e.target.value) || 1 },
+              }))
+            }
+          />
+          <small className="text-muted">
+            Define cuántos días hacia adelante se generarán automáticamente los servicios.
+          </small>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label">Excepciones</label>
+          {formRuta.schedule.exceptions.map((ex, idx) => (
+            <div key={idx} className="d-flex gap-2 mb-2">
+              <input
+                type="date"
+                className="form-control"
+                value={ex.date ? ex.date.split("T")[0] : ""}
+                onChange={(e) => {
+                  const updated = [...formRuta.schedule.exceptions];
+                  updated[idx].date = e.target.value;
+                  setFormRuta((prev) => ({
+                    ...prev,
+                    schedule: { ...prev.schedule, exceptions: updated },
+                  }));
+                }}
+              />
+              <select
+                className="form-select"
+                value={ex.type}
+                onChange={(e) => {
+                  const updated = [...formRuta.schedule.exceptions];
+                  updated[idx].type = e.target.value;
+                  setFormRuta((prev) => ({
+                    ...prev,
+                    schedule: { ...prev.schedule, exceptions: updated },
+                  }));
+                }}
+              >
+                <option value="unavailable">No disponible</option>
+                <option value="available">Disponible</option>
+              </select>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Motivo"
+                value={ex.reason || ""}
+                onChange={(e) => {
+                  const updated = [...formRuta.schedule.exceptions];
+                  updated[idx].reason = e.target.value;
+                  setFormRuta((prev) => ({
+                    ...prev,
+                    schedule: { ...prev.schedule, exceptions: updated },
+                  }));
+                }}
+              />
+              <button
+                type="button"
+                className="btn btn-outline-danger"
+                onClick={() => {
+                  setFormRuta((prev) => ({
+                    ...prev,
+                    schedule: {
+                      ...prev.schedule,
+                      exceptions: prev.schedule.exceptions.filter((_, i) => i !== idx),
+                    },
+                  }));
+                }}
+              >
+                <i className="bi bi-trash" />
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm"
+            onClick={() =>
+              setFormRuta((prev) => ({
+                ...prev,
+                schedule: {
+                  ...prev.schedule,
+                  exceptions: [
+                    ...prev.schedule.exceptions,
+                    { date: null, type: "unavailable", reason: "" },
+                  ],
+                },
+              }))
+            }
+          >
+            + Agregar excepción
+          </button>
         </div>
 
         {/* Layout de bus */}
