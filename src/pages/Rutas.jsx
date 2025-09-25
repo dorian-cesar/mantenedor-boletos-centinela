@@ -513,7 +513,7 @@ const Rutas = () => {
                                       <tr>
                                         <th>#</th>
                                         <th>Nombre</th>
-                                        <th>Offset</th>
+                                        <th>Hora Estimada</th>
                                         <th>Precio</th>
                                       </tr>
                                     </thead>
