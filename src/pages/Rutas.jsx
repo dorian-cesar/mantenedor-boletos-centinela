@@ -284,7 +284,7 @@ const Rutas = () => {
       durationMinutes,
       direction: formRuta.direction,
       stops: stopsFinal,
-      layout: formRuta.layout || null,
+      layout: formRuta.layout ? String(formRuta.layout) : null,
       schedule: formRuta.schedule 
     };
 
@@ -311,6 +311,12 @@ const Rutas = () => {
       }
 
       const rutaGuardada = body;
+      if (rutaGuardada.layout && typeof rutaGuardada.layout === "string") {
+        const layoutObj = layouts.find(l => l._id === rutaGuardada.layout);
+        if (layoutObj) {
+          rutaGuardada.layout = layoutObj;
+        }
+      }
       setRutas((prev) =>
         esNueva
           ? [...prev, rutaGuardada]

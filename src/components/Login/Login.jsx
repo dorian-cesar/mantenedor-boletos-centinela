@@ -5,9 +5,6 @@ import { useNavigate } from 'react-router-dom';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap-icons/font/bootstrap-icons.css';
 
-//const API_URL = "https://bcentinela.dev-wit.com/api";
-//const API_URL = "http://localhost:3000/api";
-
 const API_URL = import.meta.env.VITE_API_URL;
 if (!API_URL) {
   throw new Error("❌ No se encontró VITE_API_URL en el entorno");
