@@ -13,6 +13,7 @@ if (!API_URL) {
 // Endpoints usados en este componente
 const SERVICES_ENDPOINT  = `${API_URL}/services`;
 const LAYOUTS_ENDPOINT   = `${API_URL}/bus-layout`;
+const CREW_ENDPOINT = `${API_URL}/users/crew`;
 
 const formatHoraCL = (iso) =>
   new Date(iso).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
@@ -49,6 +50,12 @@ const Servicios = () => {
   const [serviciosPorFecha, setServiciosPorFecha] = useState({});   
   const [fechasTabs, setFechasTabs] = useState([]);
   const [actualizando, setActualizando] = useState(false);  
+  const [crewModalVisible, setCrewModalVisible] = useState(false);
+  const [crewList, setCrewList] = useState([]);
+  const [selectedServiceId, setSelectedServiceId] = useState(null);
+  const [selectedDriver, setSelectedDriver] = useState('');
+  const [selectedAssistants, setSelectedAssistants] = useState([]);
+
 
   // === Exportación a CSV ===
   const [exportMode, setExportMode] = useState('visibles'); // 'visibles' | 'rango' | 'todos'
@@ -59,6 +66,59 @@ const Servicios = () => {
     if (value === null || value === undefined) return '';
     const s = String(value).replace(/"/g, '""');
     return /[",\n\r;]/.test(s) ? `"${s}"` : s;
+  };
+
+  const handleOpenCrewModal = async (serviceId) => {
+    setSelectedServiceId(serviceId);
+    try {
+      const res = await fetch(CREW_ENDPOINT, {
+        headers: {
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
+      });
+      if (!res.ok) throw new Error("No se pudo obtener tripulación");
+      const data = await res.json();
+      setCrewList(data.users || []); 
+      setCrewModalVisible(true);
+    } catch (err) {
+      console.error(err);
+      showToast("Error", "No se pudo cargar la tripulación", true);
+    }
+  };
+
+  const handleAssignCrew = async () => {
+    if (!selectedDriver) {
+      showToast("Advertencia", "Debes seleccionar al menos 1 chofer", true);
+      return;
+    }
+    if (selectedAssistants.length === 0) {
+      showToast("Advertencia", "Debes seleccionar al menos 1 auxiliar", true);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${SERVICES_ENDPOINT}/${selectedServiceId}/assign`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${sessionStorage.getItem("token")}`,
+        },
+        body: JSON.stringify({
+          crew: [
+            { user: selectedDriver, role: "conductor" },
+            ...selectedAssistants.map((id) => ({ user: id, role: "auxiliar" })),
+          ],
+        }),
+      });
+
+      if (!res.ok) throw new Error("Error al asignar tripulación");
+      showToast("Éxito", "Tripulación asignada correctamente");
+      setCrewModalVisible(false);
+      await fetchServicios(); // refresca la tabla
+    } catch (err) {
+      console.error(err);
+      showToast("Error", err.message, true);
+    }
   };
 
   const buildCSV = (rows) => {
@@ -160,67 +220,6 @@ const Servicios = () => {
   const handleToggleOrden = () => {
     setOrdenAscendente(prev => !prev);
   };
-
-  const validarCampos = () => {
-    const camposRequeridos = [
-      'origin', 'destination',
-      'terminalOrigin', 'terminalDestination',
-      'startDate', 'arrivalDate',
-      'time', 'arrivalTime',
-      'company', 'busLayout',
-      'busTypeDescription',
-      'seatDescriptionFirst',
-      'priceFirst'
-    ];
-
-    for (let campo of camposRequeridos) {
-      if (!nuevoServicio[campo] || nuevoServicio[campo]?.toString().trim() === '') {
-        const etiqueta = etiquetasCampos[campo] || campo;
-        showToast('Advertencia', `Debe completar el campo: ${etiqueta}`, true);
-
-        return false;
-      }
-    }
-
-    if (!nuevoServicio.days || nuevoServicio.days.length === 0) {
-      showToast('Advertencia', 'Debe seleccionar al menos un día vigente.', true);
-      return false;
-    }
-
-    const layout = layouts.find(l => l.name === nuevoServicio.busLayout);
-    const tieneDosPisos = layout?.pisos === 2;
-
-    if (tieneDosPisos) {
-      if (!nuevoServicio.seatDescriptionSecond || nuevoServicio.seatDescriptionSecond.trim() === '') {
-        showToast('Advertencia', 'Debe completar la descripción del 2° piso.', true);
-        return false;
-      }
-      if (!nuevoServicio.priceSecond || nuevoServicio.priceSecond.toString().trim() === '') {
-        showToast('Advertencia', 'Debe ingresar el precio del 2° piso.', true);
-        return false;
-      }
-    }
-
-    return true;
-  };
-  
-  const etiquetasCampos = {
-    origin: "Ciudad Origen",
-    destination: "Ciudad Destino",
-    terminalOrigin: "Terminal Origen",
-    terminalDestination: "Terminal Destino",
-    startDate: "Fecha de Salida",
-    arrivalDate: "Fecha de Llegada",
-    time: "Hora de Salida",
-    arrivalTime: "Hora de Llegada",
-    company: "Compañía",
-    busLayout: "Layout del Bus",
-    busTypeDescription: "Tipo de Bus",
-    seatDescriptionFirst: "Descripción 1° Piso",
-    seatDescriptionSecond: "Descripción 2° Piso",
-    priceFirst: "Precio 1° Piso",
-    priceSecond: "Precio 2° Piso",
-  };  
 
   useEffect(() => {
     const fetchLayouts = async () => {
@@ -469,6 +468,13 @@ const Servicios = () => {
                               <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
                               <td> 
                                 <button
+                                  className="btn btn-sm btn-primary me-1"
+                                  onClick={() => handleOpenCrewModal(servicio._id)}
+                                >
+                                  <i className="bi bi-people"></i>
+                                </button>
+
+                                <button
                                   className="btn btn-sm btn-danger"
                                   onClick={() => handleEliminar(servicio._id)}
                                 >
@@ -545,6 +551,13 @@ const Servicios = () => {
                                     <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
                                     <td>
                                       <button
+                                        className="btn btn-sm btn-primary me-1"
+                                        onClick={() => handleOpenCrewModal(servicio._id)}
+                                      >
+                                        <i className="bi bi-people"></i>
+                                      </button>
+
+                                      <button
                                         className="btn btn-sm btn-danger"
                                         onClick={() => handleEliminar(servicio._id)}
                                       >
@@ -570,6 +583,54 @@ const Servicios = () => {
           </div>
         </main>
       </div> 
+
+      <ModalBase
+        visible={crewModalVisible}
+        title="Asignar tripulación"
+        size="md"
+        onClose={() => setCrewModalVisible(false)}
+        footer={
+          <div className="d-flex justify-content-end gap-2">
+            <button className="btn btn-secondary" onClick={() => setCrewModalVisible(false)}>
+              Cancelar
+            </button>
+            <button className="btn btn-success" onClick={handleAssignCrew}>
+              <i className="bi bi-check2 me-1"></i> Asignar
+            </button>
+          </div>
+        }
+      >
+        <div className="mb-3">
+          <label className="form-label">Chofer</label>
+          <select
+            className="form-select"
+            value={selectedDriver}
+            onChange={(e) => setSelectedDriver(e.target.value)}
+          >
+            <option value="">Selecciona un chofer</option>
+            {crewList.filter(c => c.role === "conductor").map(c => (
+              <option key={c._id} value={c._id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mb-3">
+          <label className="form-label">Auxiliares</label>
+          <select
+            multiple
+            className="form-select"
+            value={selectedAssistants}
+            onChange={(e) =>
+              setSelectedAssistants(Array.from(e.target.selectedOptions, opt => opt.value))
+            }
+          >
+            {crewList.filter(c => c.role === "auxiliar").map(c => (
+              <option key={c._id} value={c._id}>{c.name}</option>
+            ))}
+          </select>
+          <small className="text-muted">Puedes seleccionar más de un auxiliar.</small>
+        </div>
+      </ModalBase>
     
       <ModalBase
         visible={exportModalVisible}
