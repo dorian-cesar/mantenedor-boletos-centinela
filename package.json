@@ -14,7 +14,9 @@
     "react-bootstrap-icons": "^1.11.6",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.3",
+    "react-select": "^5.10.2",
     "react-sortablejs": "^6.1.4",
+    "react-window": "^1.8.11",
     "sortablejs": "^1.15.6",
     "sweetalert2": "^11.22.2"
   },
