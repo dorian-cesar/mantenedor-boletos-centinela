@@ -120,11 +120,15 @@ const Usuarios = () => {
 
   const [filtro, setFiltro] = useState('');
 
-  const usuariosFiltrados = usuarios.filter((u) =>
-    [u.name, u.email, u.role].some((campo) =>
-      campo.toLowerCase().includes(filtro.toLowerCase())
-    )
-  );
+  const usuariosFiltrados = usuarios.filter((u) => {
+    const texto = filtro.toLowerCase();
+
+    return (
+      [u.name, u.email, u.role, u.rut]
+        .some((campo) => campo?.toLowerCase().includes(texto)) ||
+      (u.activo ? "activo" : "inactivo").includes(texto)
+    );
+  });
 
   const usuariosAMostrar = usuariosFiltrados.slice(
     (paginaActual - 1) * usuariosPorPagina,
@@ -272,8 +276,10 @@ const Usuarios = () => {
                 <thead className="table-light">
                   <tr>
                     <th>Nombre</th>
+                    <th>RUT</th>
                     <th>Email</th>
                     <th>Rol</th>
+                    <th>Estado</th>
                     <th>Fecha de Registro</th>
                     <th>Acciones</th>
                   </tr>
@@ -282,8 +288,16 @@ const Usuarios = () => {
                   {usuariosAMostrar.map((usuario) => (
                     <tr key={usuario._id}>
                       <td>{usuario.name}</td>
+                      <td>{usuario.rut || "—"}</td>
                       <td>{usuario.email}</td>
                       <td>{usuario.role}</td>
+                      <td>
+                        {usuario.activo ? (
+                          <span className="badge bg-success">Activo</span>
+                        ) : (
+                          <span className="badge bg-secondary">Inactivo</span>
+                        )}
+                      </td>
                       <td>{formatearFecha(usuario.createdAt)}</td>
                       <td>
                         <button
@@ -406,6 +420,8 @@ const Usuarios = () => {
                 <option value="superAdmin">Administrador General</option>
                 <option value="centinela">Centinela</option>
                 <option value="contratista">Contratista</option>
+                <option value="conductor">Conductor</option>
+                <option value="auxiliar">Auxiliar</option>
               </select>
             </div>
             <div className="form-check form-switch d-flex align-items-center mt-4">
