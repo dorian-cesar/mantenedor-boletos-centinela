@@ -90,7 +90,59 @@ const Servicios = () => {
   const [selectedServiceId, setSelectedServiceId] = useState(null);
   const [selectedDriver, setSelectedDriver] = useState('');
   const [selectedAssistants, setSelectedAssistants] = useState([]);
+  const [detailsVisible, setDetailsVisible] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [serviceDetails, setServiceDetails] = useState(null);
+  const [soloPendientes, setSoloPendientes] = useState(false);
 
+  // Estado de tripulación: completo si hay 1 conductor y ≥1 auxiliar
+  const crewStatus = (svc) => {
+    const crew = Array.isArray(svc?.crew) ? svc.crew : [];
+    const hasDriver = crew.some(c => c.role === 'conductor');
+    const hasAssistant = crew.some(c => c.role === 'auxiliar');
+    const complete = hasDriver && hasAssistant;
+    const missing = [];
+    if (!hasDriver) missing.push('chofer');
+    if (!hasAssistant) missing.push('auxiliar');
+    return { complete, hasDriver, hasAssistant, missing };
+  };
+
+  // Render del puntito verde/rojo con tooltip accesible
+  const renderStatusDot = (svc) => {
+    const { complete, missing } = crewStatus(svc);
+    const title = complete ? 'Tripulación completa' : `Falta: ${missing.join(' y ')}`;
+    return (
+      <span title={title} aria-label={title} className="d-inline-flex align-items-center">
+        <i
+          className={`bi bi-circle-fill ${complete ? 'text-success' : 'text-danger'}`}
+          style={{ fontSize: '0.65rem' }}
+        />
+      </span>
+    );
+  };
+
+  // Helpers visuales
+  const formatCLP = (n) =>
+    new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(n ?? 0);
+
+  // Devuelve [salida, llegada] usando departures
+  const endpointsFrom = (svc) => {
+    const salida = svc?.departures?.[0] || null;
+    const llegada = svc?.departures?.[svc?.departures?.length - 1] || null;
+    return [salida, llegada];
+  };
+
+  // Click y teclado para abrir detalles desde la fila
+  const onRowClick = (svc) => handleOpenDetails(svc);
+  const onRowKey = (e, svc) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleOpenDetails(svc);
+    }
+  };
+
+  // Para que los botones dentro de la fila no disparen el onClick del <tr>
+  const stop = (e) => e.stopPropagation();
 
   // === Exportación a CSV ===
   const [exportMode, setExportMode] = useState('visibles'); // 'visibles' | 'rango' | 'todos'
@@ -153,6 +205,33 @@ const Servicios = () => {
       console.error(err);
       showToast("Error", "No se pudo cargar la tripulación", true);
     }
+  };
+
+  const handleOpenDetails = async (service) => {
+    // Pinta algo altiro y luego actualiza con el GET /services/:id
+    setServiceDetails(service);
+    setDetailsVisible(true);
+    setDetailsLoading(true);
+    try {
+      const res = await fetch(`${SERVICES_ENDPOINT}/${service._id}`, {
+        headers: { "Authorization": `Bearer ${sessionStorage.getItem("token")}` },
+      });
+      if (!res.ok) throw new Error("No se pudieron obtener los detalles del servicio.");
+      const data = await res.json();
+      const svc = data.service ?? data; // soporta {service:{...}} y objeto plano
+      setServiceDetails(svc);
+    } catch (err) {
+      console.error(err);
+      showToast("Error", err.message || "No se pudieron cargar los detalles", true);
+    } finally {
+      setDetailsLoading(false);
+    }
+  };
+
+  const handleCloseDetails = () => {
+    setDetailsVisible(false);
+    setServiceDetails(null);
+    setDetailsLoading(false);
   };
 
   const handleCloseCrewModal = () => {
@@ -333,7 +412,11 @@ const Servicios = () => {
       const coincideDestino = !filtroDestino || rm.destination === filtroDestino;
       const texto = `${rm.name} ${rm.origin} ${rm.destination} ${s._id} ${s.layout?.name || ''}`.toLowerCase();
       const coincideTexto = !text || texto.includes(text);
-      return coincideOrigen && coincideDestino && coincideTexto;
+      const pasaTextoYFiltros = coincideOrigen && coincideDestino && coincideTexto;
+
+      if (!pasaTextoYFiltros) return false;
+      // si está activado "Solo pendientes", excluye completos
+      return !soloPendientes || !crewStatus(s).complete;
     });
 
     const ordenados = ordenarServicios(filtrados, orden, ordenAscendente);
@@ -503,6 +586,18 @@ const Servicios = () => {
                   {destinos.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
               </div>
+              <div className="form-check form-switch ms-2">
+                <input
+                  className="form-check-input"
+                  type="checkbox"
+                  id="switchPendientes"
+                  checked={soloPendientes}
+                  onChange={(e) => setSoloPendientes(e.target.checked)}
+                />
+                <label className="form-check-label" htmlFor="switchPendientes">
+                  Solo pendientes
+                </label>
+              </div>
             </div>
 
             <Tabs
@@ -525,6 +620,7 @@ const Servicios = () => {
                           <th>Fecha Salida</th>
                           <th>Fecha Llegada</th>
                           <th>Duración</th>
+                          <th style={{ width: 32 }}>Estado</th>
                           <th>Acciones</th>
                         </tr>
                       </thead>
@@ -534,7 +630,14 @@ const Servicios = () => {
                           const llegada = servicio.departures?.at(-1);
 
                           return (
-                            <tr key={servicio._id}>
+                            <tr
+                              key={servicio._id}
+                              tabIndex={0}
+                              className="table-row-clickable"
+                              onClick={() => onRowClick(servicio)}
+                              onKeyDown={(e) => onRowKey(e, servicio)}
+                              style={{ cursor: 'pointer' }}
+                            >
                               <td>{servicio.routeMaster?.origin} → {servicio.routeMaster?.destination}</td>
                               <td>{servicio.routeMaster?.name || '—'}</td>
                               <td>{servicio.layout?.name || '—'}</td>
@@ -543,17 +646,28 @@ const Servicios = () => {
                               <td>{salida ? formatFechaCL(salida.time) : '—'}</td>
                               <td>{llegada ? formatFechaCL(llegada.time) : '—'}</td>
                               <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
-                              <td> 
+                              <td>{renderStatusDot(servicio)}</td>
+                              <td>
+                                <button
+                                  className="btn btn-sm btn-outline-primary me-1"
+                                  title="Ver detalles"
+                                  onClick={(e) => { stop(e); handleOpenDetails(servicio); }}
+                                >
+                                  <i className="bi bi-eye"></i>
+                                </button>
+
                                 <button
                                   className="btn btn-sm btn-primary me-1"
-                                  onClick={() => handleOpenCrewModal(servicio._id)}
+                                  title="Asignar tripulación"
+                                  onClick={(e) => { stop(e); handleOpenCrewModal(servicio._id); }}
                                 >
                                   <i className="bi bi-people"></i>
                                 </button>
 
                                 <button
                                   className="btn btn-sm btn-danger"
-                                  onClick={() => handleEliminar(servicio._id)}
+                                  title="Eliminar"
+                                  onClick={(e) => { stop(e); handleEliminar(servicio._id); }}
                                 >
                                   <i className="bi bi-trash"></i>
                                 </button>
@@ -608,6 +722,7 @@ const Servicios = () => {
                                 <th>Fecha Salida</th>
                                 <th>Fecha Llegada</th>
                                 <th>Duración</th>
+                                <th style={{ width: 32 }}>Estado</th>
                                 <th>Acciones</th>
                               </tr>
                             </thead>
@@ -617,7 +732,14 @@ const Servicios = () => {
                                 const llegada = servicio.departures?.at(-1);
 
                                 return (
-                                  <tr key={servicio._id}>
+                                  <tr
+                                    key={servicio._id}
+                                    tabIndex={0}
+                                    className="table-row-clickable"
+                                    onClick={() => onRowClick(servicio)}
+                                    onKeyDown={(e) => onRowKey(e, servicio)}
+                                    style={{ cursor: 'pointer' }}
+                                  >
                                     <td>{servicio.routeMaster?.origin} → {servicio.routeMaster?.destination}</td>
                                     <td>{servicio.routeMaster?.name || '—'}</td>
                                     <td>{servicio.layout?.name || '—'}</td>
@@ -626,17 +748,28 @@ const Servicios = () => {
                                     <td>{salida ? formatFechaCL(salida.time) : '—'}</td>
                                     <td>{llegada ? formatFechaCL(llegada.time) : '—'}</td>
                                     <td>{minutesToHhMm(servicio.routeMaster?.durationMinutes || 0)}</td>
+                                    <td>{renderStatusDot(servicio)}</td>
                                     <td>
                                       <button
+                                        className="btn btn-sm btn-outline-primary me-1"
+                                        title="Ver detalles"
+                                        onClick={(e) => { stop(e); handleOpenDetails(servicio); }}
+                                      >
+                                        <i className="bi bi-eye"></i>
+                                      </button>
+
+                                      <button
                                         className="btn btn-sm btn-primary me-1"
-                                        onClick={() => handleOpenCrewModal(servicio._id)}
+                                        title="Asignar tripulación"
+                                        onClick={(e) => { stop(e); handleOpenCrewModal(servicio._id); }}
                                       >
                                         <i className="bi bi-people"></i>
                                       </button>
 
                                       <button
                                         className="btn btn-sm btn-danger"
-                                        onClick={() => handleEliminar(servicio._id)}
+                                        title="Eliminar"
+                                        onClick={(e) => { stop(e); handleEliminar(servicio._id); }}
                                       >
                                         <i className="bi bi-trash"></i>
                                       </button>
@@ -790,6 +923,260 @@ const Servicios = () => {
             </>
           )}
         </div>
+      </ModalBase>
+
+      <ModalBase
+        visible={detailsVisible}
+        title={serviceDetails?.routeMaster?.name || "Detalles del servicio"}
+        size="lg"
+        onClose={handleCloseDetails}
+        footer={
+          <div className="d-flex justify-content-between w-100">
+            <div className="d-flex align-items-center gap-2">
+              {/* Acciones rápidas */}
+              <button
+                className="btn btn-outline-primary btn-sm"
+                onClick={() => {
+                  handleCloseDetails();
+                  handleOpenCrewModal(serviceDetails?._id);
+                }}
+              >
+                <i className="bi bi-people me-1"></i> Asignar tripulación
+              </button>
+              <button
+                className="btn btn-outline-secondary btn-sm"
+                onClick={() => navigator.clipboard.writeText(serviceDetails?._id || "")}
+              >
+                <i className="bi bi-clipboard-check me-1"></i> Copiar ID
+              </button>
+            </div>
+            <div>
+              <button className="btn btn-secondary" onClick={handleCloseDetails}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        }
+      >
+        {detailsLoading && (
+          <div className="d-flex align-items-center gap-2 text-muted">
+            <span className="spinner-border spinner-border-sm" />
+            Cargando detalles…
+          </div>
+        )}
+
+        {!detailsLoading && serviceDetails && (
+          <div className="container-fluid">
+            {/* Resumen */}
+            <div className="row g-3">
+              <div className="col-12">
+                <div className="d-flex flex-wrap align-items-center justify-content-between">
+                  <div className="d-flex flex-column">
+                    <h5 className="mb-1">
+                      {serviceDetails.routeMaster?.origin} → {serviceDetails.routeMaster?.destination}
+                    </h5>
+                    <div className="text-muted">
+                      Ruta: {serviceDetails.routeMaster?.name || "—"}
+                    </div>
+                  </div>
+                  <div className="d-flex flex-wrap align-items-center justify-content-between">
+                    <div className="d-flex flex-column">
+                      <h5 className="mb-1">
+                        {serviceDetails.routeMaster?.origin} → {serviceDetails.routeMaster?.destination}
+                      </h5>
+                      <div className="text-muted">
+                        Ruta: {serviceDetails.routeMaster?.name || "—"}
+                      </div>
+                    </div>
+
+                    {/* Reemplazo: bloque de indicadores */}
+                    <div className="d-flex flex-wrap gap-2">
+                      {/* Indicador de tripulación completa/incompleta */}
+                      <span className="d-inline-flex align-items-center gap-1">
+                        {renderStatusDot(serviceDetails)}
+                        <span className="text-muted small">Tripulación</span>
+                      </span>
+
+                      {/* Dirección */}
+                      <span className={`badge text-bg-${serviceDetails.direction === 'subida' ? 'primary' : 'info'}`}>
+                        {serviceDetails.direction || '—'}
+                      </span>
+                      {/* FAR */}
+                      {serviceDetails.far ? (
+                        <span className={`badge text-bg-${serviceDetails.far.status === 'rendido' ? 'success' : 'warning'}`}>
+                          FAR: {serviceDetails.far.status}
+                        </span>
+                      ) : (
+                        <span className="badge text-bg-secondary">FAR: —</span>
+                      )}
+                      {/* Bus */}
+                      <span className={`badge text-bg-${serviceDetails.bus ? 'success' : 'secondary'}`}>
+                        Bus {serviceDetails.bus ? 'asignado' : 'no asignado'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Horarios */}
+              <div className="col-12 col-lg-6">
+                <div className="card shadow-sm">
+                  <div className="card-body">
+                    <h6 className="card-title mb-3">Horarios</h6>
+                    {(() => {
+                      const [salida, llegada] = endpointsFrom(serviceDetails);
+                      return (
+                        <ul className="list-unstyled mb-0">
+                          <li>
+                            <strong>Salida:</strong>{" "}
+                            {salida ? `${formatFechaCL(salida.time)} ${formatHoraCL(salida.time)}` : "—"}
+                          </li>
+                          <li>
+                            <strong>Llegada:</strong>{" "}
+                            {llegada ? `${formatFechaCL(llegada.time)} ${formatHoraCL(llegada.time)}` : "—"}
+                          </li>
+                          <li>
+                            <strong>Duración:</strong>{" "}
+                            {minutesToHhMm(serviceDetails.routeMaster?.durationMinutes || 0)}
+                          </li>
+                        </ul>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bus */}
+              <div className="col-12 col-lg-6">
+                <div className="card shadow-sm">
+                  <div className="card-body">
+                    <h6 className="card-title mb-3">Bus</h6>
+                    {serviceDetails.bus ? (
+                      <ul className="list-unstyled mb-0">
+                        <li><strong>Patente:</strong> {serviceDetails.bus.patente || '—'}</li>
+                        <li><strong>Marca/Modelo:</strong> {serviceDetails.bus.marca || '—'} {serviceDetails.bus.modelo || ''}</li>
+                        <li><strong>Año:</strong> {serviceDetails.bus.anio || '—'}</li>
+                        <li><strong>Revisión técnica:</strong> {serviceDetails.bus.revision_tecnica ? formatFechaCL(serviceDetails.bus.revision_tecnica) : '—'}</li>
+                        <li><strong>Permiso circulación:</strong> {serviceDetails.bus.permiso_circulacion ? formatFechaCL(serviceDetails.bus.permiso_circulacion) : '—'}</li>
+                        <li><strong>Layout:</strong> {serviceDetails.layout?.name || '—'}</li>
+                      </ul>
+                    ) : (
+                      <span className="text-muted">No hay bus asignado.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Paradas y precios */}
+              <div className="col-12">
+                <div className="card shadow-sm">
+                  <div className="card-body">
+                    <h6 className="card-title mb-3">Paradas y precios</h6>
+                    <div className="table-responsive">
+                      <table className="table table-sm align-middle">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Parada</th>
+                            <th>Hora programada</th>
+                            <th>Precio</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(serviceDetails.departures || []).map((d, idx) => (
+                            <tr key={idx}>
+                              <td>{d.order}</td>
+                              <td>{d.stop}</td>
+                              <td>{`${formatFechaCL(d.time)} ${formatHoraCL(d.time)}`}</td>
+                              <td>{d.price != null ? formatCLP(d.price) : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {(!serviceDetails.departures || serviceDetails.departures.length === 0) && (
+                      <div className="text-muted">No hay paradas configuradas.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Tripulación */}
+              <div className="col-12">
+                <div className="card shadow-sm">
+                  <div className="card-body">
+                    <h6 className="card-title mb-3">Tripulación</h6>
+                    {serviceDetails.crew?.length ? (
+                      <div className="d-flex flex-wrap gap-2">
+                        {serviceDetails.crew.map((c, i) => {
+                          const id = userIdOf(c.user);
+                          const nombre = userNameOf(c.user);
+                          const rol = c.role;
+                          const badge = rol === 'conductor' ? 'primary' : 'info';
+                          return (
+                            <span key={`${id}-${i}`} className={`badge rounded-pill text-bg-${badge}`}>
+                              {nombre} <small className="ms-1">({rol})</small>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <span className="text-muted">No hay tripulación asignada.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* FAR */}
+              <div className="col-12">
+                <div className="card shadow-sm">
+                  <div className="card-body">
+                    <h6 className="card-title mb-3">Fondo a rendir (FAR)</h6>
+                    {serviceDetails.far ? (
+                      <>
+                        <div className="d-flex flex-wrap gap-2 mb-2">
+                          <span className="badge text-bg-secondary">Folio: {serviceDetails.far.folio || '—'}</span>
+                          <span className="badge text-bg-secondary">Monto: {formatCLP(serviceDetails.far.amount)}</span>
+                          <span className={`badge text-bg-${serviceDetails.far.status === 'rendido' ? 'success' : 'warning'}`}>
+                            Estado: {serviceDetails.far.status}
+                          </span>
+                          {serviceDetails.far.deliveredTo && (
+                            <span className="badge text-bg-secondary">Entregado a: {serviceDetails.far.deliveredTo}</span>
+                          )}
+                        </div>
+                        <div className="table-responsive">
+                          <table className="table table-sm">
+                            <thead>
+                              <tr><th>Descripción</th><th className="text-end">Monto</th></tr>
+                            </thead>
+                            <tbody>
+                              {(serviceDetails.far.expenses || []).map((e) => (
+                                <tr key={e._id}>
+                                  <td>{e.description}</td>
+                                  <td className="text-end">{formatCLP(e.amount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-muted">Sin FAR asociado.</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Metadatos */}
+              <div className="col-12">
+                <div className="text-muted small">
+                  Creado: {serviceDetails.createdAt ? `${formatFechaCL(serviceDetails.createdAt)} ${formatHoraCL(serviceDetails.createdAt)}` : '—'} ·
+                  Actualizado: {serviceDetails.updatedAt ? `${formatFechaCL(serviceDetails.updatedAt)} ${formatHoraCL(serviceDetails.updatedAt)}` : '—'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </ModalBase>
     </>
   );
