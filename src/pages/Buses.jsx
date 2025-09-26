@@ -6,6 +6,14 @@ import { showToast } from '@components/Toast/Toast';
 import ModalBase from '@components/ModalBase/ModalBase';
 import Swal from 'sweetalert2';
 
+const API_URL = import.meta.env.VITE_API_URL;
+if (!API_URL) {
+  throw new Error("❌ No se encontró VITE_API_URL en el entorno");
+}
+
+const BUSES_ENDPOINT = `${API_URL}/buses`;
+const LAYOUTS_ENDPOINT = `${API_URL}/bus-layout`;
+
 const Buses = () => {
   const [buses, setBuses] = useState([]);
   const [cargando, setCargando] = useState(true);
@@ -25,11 +33,15 @@ const Buses = () => {
   const [availableLayouts, setAvailableLayouts] = useState([]);
   const [layoutsLoading, setLayoutsLoading] = useState(false);
   const [layoutsError, setLayoutsError] = useState('');
+  const [modalLayoutVisible, setModalLayoutVisible] = useState(false);
+  const [layoutSeleccionado, setLayoutSeleccionado] = useState(null);
 
   useEffect(() => {
     const fetchBuses = async () => {
       try {
-        const res = await fetch('https://bcentinela.dev-wit.com/api/buses/');
+        const res = await fetch(BUSES_ENDPOINT, {
+          headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` }
+        });
         const data = await res.json();
         setBuses(data);
       } catch (error) {
@@ -47,10 +59,11 @@ const Buses = () => {
       setLayoutsLoading(true);
       setLayoutsError('');
       try {
-        const res = await fetch('https://bcentinela.dev-wit.com/api/layouts/');
-        const text = await res.text();
-        let body;
-        try { body = JSON.parse(text); } catch { body = []; }
+        const res = await fetch(LAYOUTS_ENDPOINT, {
+          headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` }
+        });
+        if (!res.ok) throw new Error('Error al obtener layouts');
+        const body = await res.json();
         const list = Array.isArray(body) ? body.filter(l => l && l._id) : [];
         setAvailableLayouts(list);
       } catch (e) {
@@ -68,7 +81,7 @@ const Buses = () => {
     [availableLayouts]
   );
 
-  const layoutLabel = (l) =>`${l.name} • ${l.pisos ?? '-'} pisos • ${l.capacidad ?? '-'} pax • ${l.columns ?? '-'}×${l.rows ?? '-'}`;
+  const layoutLabel = (l) =>`${l.name} • ${l.pisos ?? '-'} pisos • ${l.capacidad ?? '-'} pax`;
 
   const formatearFecha = (fechaISO) => {
     const fecha = new Date(fechaISO);
@@ -90,10 +103,10 @@ const Buses = () => {
     if (!result.isConfirmed) return;
 
     try {
-      const res = await fetch(`https://bcentinela.dev-wit.com/api/buses/${id}`, {
+      const res = await fetch(`${BUSES_ENDPOINT}/${id}`, {
         method: 'DELETE',
+        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` }
       });
-
       if (!res.ok) throw new Error('Error al eliminar el bus');
 
       setBuses((prev) => prev.filter((b) => b._id !== id));      
@@ -109,7 +122,6 @@ const Buses = () => {
   const [soloDisponibles, setSoloDisponibles] = useState('all'); // 'all' | 'yes' | 'no'
   const [sortKey, setSortKey] = useState('patente');
   const [sortDir, setSortDir] = useState('asc'); // 'asc' | 'desc'
-  const [compacto, setCompacto] = useState(false);
 
   const normalize = (v) => (v ?? '').toString().toLowerCase();
   const asDate = (iso) => (iso ? new Date(iso) : null);
@@ -212,7 +224,9 @@ const Buses = () => {
                   onClick={async () => {
                     setActualizando(true);
                     try {
-                      const res = await fetch('https://bcentinela.dev-wit.com/api/buses/');
+                      const res = await fetch(BUSES_ENDPOINT, {
+                        headers: { Authorization: `Bearer ${sessionStorage.getItem("token")}` }
+                      });
                       if (!res.ok) throw new Error('Error al obtener buses desde el servidor');
                       const data = await res.json();
                       setBuses((prev) => {
@@ -292,11 +306,6 @@ const Buses = () => {
                 <button className={`btn btn-outline-secondary ${soloDisponibles==='yes' ? 'active' : ''}`} onClick={()=>setSoloDisponibles('yes')}>Disponibles</button>
                 <button className={`btn btn-outline-secondary ${soloDisponibles==='no' ? 'active' : ''}`} onClick={()=>setSoloDisponibles('no')}>No disponibles</button>
               </div>
-
-              <div className="form-check form-switch ms-auto">
-                <input className="form-check-input" type="checkbox" id="compactSwitch" checked={compacto} onChange={()=>setCompacto(v=>!v)} />
-                <label className="form-check-label" htmlFor="compactSwitch">Compactar filas</label>
-              </div>
             </div>
           </div>
 
@@ -307,7 +316,7 @@ const Buses = () => {
             </div>
           ) : (
             <div className="table-responsive">
-              <table className={`table ${compacto ? 'table-sm' : ''} table-hover align-middle`}>
+              <table className="table table-hover align-middle">
                 <thead className="table-light">
                   <tr>
                     <th role="button" onClick={()=>toggleSort('patente')}>Patente <i className={sortIcon('patente')} /></th>
@@ -440,13 +449,16 @@ const Buses = () => {
                   setGuardando(true);
                   try {
                     const url = busEditando
-                      ? `https://bcentinela.dev-wit.com/api/buses/${busEditando._id}`
-                      : 'https://bcentinela.dev-wit.com/api/buses/';
+                      ? `${BUSES_ENDPOINT}/${busEditando._id}`
+                      : BUSES_ENDPOINT;
                     const method = busEditando ? 'PUT' : 'POST';
 
                     const res = await fetch(url, {
                       method,
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionStorage.getItem("token")}`
+                      },
                       body: JSON.stringify(formBus),
                     });
 
@@ -531,15 +543,24 @@ const Buses = () => {
               </select>
 
               {!!formBus.layout && layoutsMap[formBus.layout] && (
-                <div className="mt-2 small text-muted">
-                  <div><strong>{layoutsMap[formBus.layout].name}</strong></div>
-                  <div>Pisos: {layoutsMap[formBus.layout].pisos ?? '-'}</div>
-                  <div>Capacidad: {layoutsMap[formBus.layout].capacidad ?? '-'}</div>
-                  <div>Disposición: {layoutsMap[formBus.layout].columns ?? '-'} columnas × {layoutsMap[formBus.layout].rows ?? '-'} filas</div>
-                  <div>Asientos P1: {layoutsMap[formBus.layout].tipo_Asiento_piso_1 ?? '-'}</div>
-                  <div>Asientos P2: {layoutsMap[formBus.layout].tipo_Asiento_piso_2 ?? '-'}</div>
-                </div>
-              )}
+              <div className="mt-2 small text-muted">
+                <div><strong>{layoutsMap[formBus.layout].name}</strong></div>
+                <div>Pisos: {layoutsMap[formBus.layout].pisos ?? '-'}</div>
+                <div>Capacidad: {layoutsMap[formBus.layout].capacidad ?? '-'}</div>
+                <div>Asientos P1: {layoutsMap[formBus.layout].tipo_Asiento_piso_1 ?? '-'}</div>
+                <div>Asientos P2: {layoutsMap[formBus.layout].tipo_Asiento_piso_2 ?? '-'}</div>
+                <button
+                  className="btn btn-sm btn-outline-secondary mt-2"
+                  onClick={() => {
+                    setLayoutSeleccionado(layoutsMap[formBus.layout]);
+                    setModalLayoutVisible(true);
+                  }}
+                >
+                  <i className="bi bi-eye" /> Ver Layout
+                </button>
+              </div>
+            )}
+
             </div>
             <div className="col-md-6">
               <label className="form-label">Revisión Técnica</label>
@@ -571,6 +592,98 @@ const Buses = () => {
               </select>
             </div>
           </div>
+        </ModalBase>
+        <ModalBase
+          visible={modalLayoutVisible}
+          title={layoutSeleccionado?.name || "Layout de bus"}
+          onClose={() => {
+            setModalLayoutVisible(false);
+            setLayoutSeleccionado(null);
+          }}
+          footer={
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                setModalLayoutVisible(false);
+                setLayoutSeleccionado(null);
+              }}
+            >
+              Cerrar
+            </button>
+          }
+        >
+          {layoutSeleccionado ? (
+            <div>
+              <p><strong>Capacidad:</strong> {layoutSeleccionado.capacidad} asientos</p>
+              <p><strong>Pisos:</strong> {layoutSeleccionado.pisos}</p>
+
+              <div className="row">
+                {/* Piso 1 */}
+                {layoutSeleccionado.floor1 && (
+                  <div className={layoutSeleccionado.floor2 ? "col-md-6" : "col-12"}>
+                    <h6 className="text-center">Piso 1</h6>
+                    {layoutSeleccionado.tipo_Asiento_piso_1 && (
+                      <p className="text-center text-muted small mb-2">
+                        Tipo de asiento: {layoutSeleccionado.tipo_Asiento_piso_1}
+                      </p>
+                    )}
+                    <div className="d-inline-block border rounded p-2 bg-light">
+                      {layoutSeleccionado.floor1.seatMap.map((row, i) => (
+                        <div key={i} className="d-flex justify-content-center">
+                          {row.map((seat, j) => (
+                            <div
+                              key={j}
+                              className="border m-1 p-2 text-center"
+                              style={{
+                                width: 40,
+                                height: 40,
+                                background: seat ? "#f8f9fa" : "transparent",
+                              }}
+                            >
+                              {seat || ""}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Piso 2 */}
+                {layoutSeleccionado.floor2 && (
+                  <div className={layoutSeleccionado.floor1 ? "col-md-6" : "col-12"}>
+                    <h6 className="text-center">Piso 2</h6>
+                    {layoutSeleccionado.tipo_Asiento_piso_2 && (
+                      <p className="text-center text-muted small mb-2">
+                        Tipo de asiento: {layoutSeleccionado.tipo_Asiento_piso_2}
+                      </p>
+                    )}
+                    <div className="d-inline-block border rounded p-2 bg-light">
+                      {layoutSeleccionado.floor2.seatMap.map((row, i) => (
+                        <div key={i} className="d-flex justify-content-center">
+                          {row.map((seat, j) => (
+                            <div
+                              key={j}
+                              className="border m-1 p-2 text-center"
+                              style={{
+                                width: 40,
+                                height: 40,
+                                background: seat ? "#f8f9fa" : "transparent",
+                              }}
+                            >
+                              {seat || ""}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p>No hay datos del layout</p>
+          )}
         </ModalBase>
       </main>
     </div>
