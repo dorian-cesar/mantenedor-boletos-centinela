@@ -357,17 +357,44 @@ const Buses = () => {
                       <td>{bus.anio}</td>
                       <td>{formatearFecha(bus.revision_tecnica)}</td>
                       <td>{formatearFecha(bus.permiso_circulacion)}</td>
-                      <td title={
-                        (typeof bus.layout === 'object' && bus.layout?.name)
-                        || layoutsMap[bus.layout]?.name
-                        || (typeof bus.layout === 'string' ? bus.layout : '')
-                      }>
+                      <td
+                        title={
+                          (typeof bus.layout === "object" && bus.layout?.name) ||
+                          layoutsMap[bus.layout]?.name ||
+                          (typeof bus.layout === "string" ? bus.layout : "")
+                        }
+                      >
                         {layoutsLoading ? (
                           <Spinner animation="border" size="sm" />
                         ) : (
-                          (typeof bus.layout === 'object' && bus.layout && bus.layout.name)
-                            || (layoutsMap[bus.layout]?.name)
-                            || (typeof bus.layout === 'string' && bus.layout ? `${bus.layout.slice(0, 8)}…` : '—')
+                          <>
+                            {(typeof bus.layout === "object" && bus.layout && bus.layout.name) ||
+                              layoutsMap[bus.layout]?.name ||
+                              (typeof bus.layout === "string" && bus.layout
+                                ? `${bus.layout.slice(0, 8)}…`
+                                : "—")}
+
+                            {/* Botón ojo junto al nombre */}
+                            {bus.layout && (
+                              <button
+                                className="btn btn-link btn-sm ms-2 p-0 align-baseline"
+                                title="Ver layout"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const layoutObj =
+                                    typeof bus.layout === "object"
+                                      ? bus.layout
+                                      : layoutsMap[bus.layout];
+                                  if (layoutObj) {
+                                    setLayoutSeleccionado(layoutObj);
+                                    setModalLayoutVisible(true);
+                                  }
+                                }}
+                              >
+                                <i className="bi bi-eye"></i>
+                              </button>
+                            )}
+                          </>
                         )}
                       </td>
                       <td>
@@ -389,9 +416,12 @@ const Buses = () => {
                                 revision_tecnica: bus.revision_tecnica.slice(0, 10),
                                 permiso_circulacion: bus.permiso_circulacion.slice(0, 10),
                                 disponible: bus.disponible,
-                                layout: typeof bus.layout === 'object' && bus.layout
-                                  ? bus.layout._id
-                                  : (typeof bus.layout === 'string' ? bus.layout : ''),
+                                layout:
+                                  typeof bus.layout === "object" && bus.layout
+                                    ? bus.layout._id
+                                    : typeof bus.layout === "string"
+                                    ? bus.layout
+                                    : "",
                               });
                               setModalVisible(true);
                             }}
@@ -402,7 +432,10 @@ const Buses = () => {
                           <button
                             className="btn btn-outline-danger"
                             title="Eliminar bus"
-                            onClick={(e) => { e.stopPropagation(); handleEliminar(bus._id); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEliminar(bus._id);
+                            }}
                           >
                             <i className="bi bi-trash" />
                           </button>
